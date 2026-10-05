@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dialog-RSN-1 Realtime Agents</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%233b5bdb'/%3E%3Cpath d='M9 12v8M13 9v14M17 12v8M21 14v4' stroke='white' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand">
+        <span class="mark" aria-hidden="true"></span>
+        <span>Dialog-RSN-1 <b>Realtime Agents</b></span>
+      </div>
+      <label class="pick">Scenario <select id="scenario"></select></label>
+      <label class="pick">Agent <select id="agent"></select></label>
+    </header>
+
+    <main>
+      <section class="pane transcript-pane" aria-label="Transcript">
+        <div class="pane-head">
+          <span>Transcript</span>
+          <span id="status" class="status" data-state="closed">Disconnected</span>
+        </div>
+        <div id="transcript" class="scroll"></div>
+        <form id="composer" class="composer">
+          <input id="text" type="text" placeholder="Type a message" autocomplete="off" disabled />
+          <button type="submit" disabled>Send</button>
+        </form>
+      </section>
+
+      <section class="pane events-pane" id="eventsPane" aria-label="Event log">
+        <div class="pane-head">
+          <span>Events</span>
+          <input id="eventFilter" class="filter" type="search" placeholder="Filter by type" />
+        </div>
+        <div id="events" class="scroll"></div>
+      </section>
+    </main>
+
+    <footer class="toolbar">
+      <button id="connect" type="button" class="primary">Connect</button>
+
+      <div class="group">
+        <label><input id="ptt" type="checkbox" /> Push to talk</label>
+        <button id="talk" type="button" class="talk" disabled>Hold to talk</button>
+        <span class="meter" aria-hidden="true"><span id="level"></span></span>
+      </div>
+
+      <div class="group">
+        <label><input id="voiceOn" type="checkbox" checked /> Voice</label>
+        <select id="voice" aria-label="Voice"></select>
+      </div>
+
+      <div class="group">
+        <label>Input audio <select id="inputFormat"></select></label>
+      </div>
+
+      <div class="group">
+        <label><input id="logs" type="checkbox" checked /> Logs</label>
+      </div>
+    </footer>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
