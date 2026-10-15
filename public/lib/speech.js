@@ -1,6 +1,7 @@
 /**
- * Speaking the replies. Dialog-RSN-1 answers in text, so the page speaks it, and tells the
- * session what the caller actually heard (playback reports).
+ * Speaking the replies. The page asks Dialog-RSN-1 for text (`output_modalities: ["text"]`),
+ * so it speaks the replies itself, and tells the session what the caller actually heard
+ * (playback reports).
  *
  * Two voices with the same interface:
  *   BrowserVoice  - the browser's own speech (Web Speech API). No key needed.
