@@ -65,7 +65,7 @@ Browser (agents, tools, UI)  --ws-->  server.js  --wss-->  api.us.poly.ai/v1/rea
 
 A browser WebSocket can't set the `X-API-KEY` header, and a key in page code is a key anyone can read. So `server.js` serves the page and relays its sockets, adding the key on the way out, and does nothing else. In production your tools would run on your server too.
 
-Dialog-RSN-1 hears the caller, decides when they've finished, and answers in text. The page speaks the answer and reports back what the caller actually heard (`poly.output_audio.started`, `.delta` and `.stopped`), so when the caller cuts in, the model knows where.
+Dialog-RSN-1 hears the caller and decides when they've finished. By default it would also speak the answer. This page asks for text with `output_modalities: ["text"]` instead, speaks the answer with the browser's voice or Cartesia, and reports back what the caller actually heard (`poly.output_audio.started`, `.delta` and `.stopped`), so when the caller cuts in, the model knows where.
 
 ### Pattern 1: handoffs
 
@@ -206,7 +206,7 @@ Tips that hold for every scenario here:
 | Pass `call_id` back exactly as it came. | It's 37 characters; a shortened one matches nothing. |
 | One `response.create` at a time. Hold typed text while the caller is speaking. | Otherwise you get collisions, or a typed message folded into the spoken turn. |
 | Once a session has had audio, keep audio flowing, with silence when the caller shouldn't be heard. | A response waits for audio to keep arriving. Stop sending and it never starts. |
-| Never send `model` or `turn_detection: null`. Always declare the input rate for PCM. | The server refuses the whole `session.update`. 8 kHz audio with no rate is never answered. |
+| Never send `turn_detection: null`. Always declare the input rate for PCM. | The server refuses the whole `session.update`. 8 kHz audio with no rate is never answered. |
 
 ## Troubleshooting
 
