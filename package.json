@@ -2,7 +2,7 @@
   "name": "dialog-rsn-1-realtime-agents",
   "version": "0.1.0",
   "private": true,
-  "description": "Realistic voice agents on Dialog-RSN-1: handoffs, a supervisor, a knowledge agent, in the browser",
+  "description": "Voice agents on Dialog-RSN-1 in the browser: one agent per call, with a welcome message, topics, flow steps and terminal transfers",
   "type": "module",
   "license": "Apache-2.0",
   "engines": {

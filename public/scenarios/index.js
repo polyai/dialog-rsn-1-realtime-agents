@@ -1,21 +1,21 @@
-import simpleHandoff from "./simpleHandoff.js";
-import customerServiceRetail from "./customerServiceRetail/index.js";
-import chatSupervisor from "./chatSupervisor/index.js";
 import knowledgeAgent from "./knowledgeAgent/index.js";
+import bikeShop from "./bikeShop/index.js";
+import textAgent from "./textAgent/index.js";
+import simpleHandoff from "./simpleHandoff.js";
 
 // Scenario key -> its agents. The first agent is where a call starts.
 export const allAgentSets = {
-  simpleHandoff,
-  customerServiceRetail,
-  chatSupervisor,
   knowledgeAgent,
+  bikeShop,
+  textAgent,
+  simpleHandoff,
 };
 
-export const defaultAgentSetKey = "chatSupervisor";
+export const defaultAgentSetKey = "knowledgeAgent";
 
 export const labels = {
-  simpleHandoff: "Simple handoff",
-  customerServiceRetail: "Retail customer service",
-  chatSupervisor: "Chat supervisor",
   knowledgeAgent: "Knowledge agent",
+  bikeShop: "Bike shop: one agent with a flow",
+  textAgent: "Bring your text agent",
+  simpleHandoff: "Handoffs, from openai-realtime-agents",
 };

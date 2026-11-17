@@ -1,11 +1,22 @@
 // Quillon Energy is a made-up energy supplier. Every policy, price and number here is invented.
 export const companyName = "Quillon Energy";
 
-// A fixed brief, on the session from the first turn: what the agent always needs to know.
+// Always-retrieved topics: on the session from the first turn, whatever the caller asks.
+// A topic's `actions` say what to do about it, often which tool to call.
 export const brief = [
   {
     name: "about-quillon",
-    content: "Quillon Energy supplies electricity and gas to homes in Oregon and Washington. The phone line is open 8 am to 8 pm Monday to Saturday. Emergencies like a gas smell go to the utility's 24-hour emergency line, 1 800 555 0199, never to Quillon.",
+    content: "Quillon Energy supplies electricity and gas to homes in Oregon and Washington. The phone line is open 8 am to 8 pm Monday to Saturday.",
+  },
+  {
+    name: "gas-emergency",
+    content: "A gas smell, a suspected leak or any danger is an emergency. Emergencies go to the utility's 24-hour emergency line, 1 800 555 0199, never to Quillon.",
+    actions: "Give the emergency number straight away, before anything else, and tell the caller to leave the property if they smell gas.",
+  },
+  {
+    name: "speak-to-a-person",
+    content: "The customer team can see and change accounts. The help line can't.",
+    actions: "If the caller asks for a person, or needs a change to their account, call transfer_call with reason SPEAK_TO or ACCOUNT_CHANGE. If the team is closed, offer requestCallback instead.",
   },
 ];
 
@@ -15,10 +26,11 @@ export const articles = [
     name: "submit-meter-reading",
     title: "Submitting a meter reading",
     content: "Customers can submit a reading in the app, on the website under Account then Meter readings, or by phone. Readings are due in the first 5 days of each month. Smart meters send readings automatically, so smart meter customers don't need to submit them.",
+    actions: "If the caller wants to give a reading now, take the meter type and the digits on the meter, then call submitMeterReading.",
   },
   {
     name: "estimated-bills",
-    title: "Why is my bill estimated?",
+    title: "Missed a meter reading? Why bills are estimated",
     content: "If no reading arrives by the 5th, the bill is estimated from the same month last year. An estimated bill is marked with an E next to the usage. Submitting a reading at any time corrects the next bill, and any difference is credited or charged then.",
   },
   {

@@ -11,7 +11,7 @@ import { RealtimeSession } from "../public/lib/session.js";
 import { AgentRunner } from "../public/lib/agents.js";
 import { allAgentSets } from "../public/scenarios/index.js";
 
-const URL = process.env.POLY_URL || "wss://api.us.poly.ai/v1/realtime";
+const URL = process.env.DIALOG_REALTIME_URL || "wss://api.studio.poly.ai/v1/realtime";
 const KEY = process.env.POLY_API_KEY;
 if (!KEY) {
   console.error("POLY_API_KEY is not set.");
@@ -21,19 +21,25 @@ if (!KEY) {
 // In Node there's no relay: connect straight to the API with the key.
 const connect = () => new WebSocket(URL, { headers: { "X-API-KEY": KEY, "User-Agent": "dialog-rsn-1-realtime-agents-check/1.0" } });
 
+// A scripted caller per scenario. A journey stops early if the agent ends the call.
 const JOURNEYS = {
-  simpleHandoff: ["Hi there!", "Yes please, one about the sea."],
-  customerServiceRetail: [
-    "Hi, I'd like to return a helmet I bought.",
-    "It's 555 201 4477.",
-    "Yes, that's right.",
-    "March 14th, 1988.",
-    "Yes.",
-    "It's the Aero commuter helmet from my September order. It's still unopened, I just don't need it.",
-    "Yes, please go ahead with the return.",
+  knowledgeAgent: [
+    "Hi, how do I send you a meter reading?",
+    "Can I give you one now? It's the electricity meter, and it says 4 8 2 1 7.",
+    "And what happens if I miss the date?",
+    "Who won the World Cup in 2018?",
+    "No, that's everything, thanks. Bye!",
   ],
-  chatSupervisor: ["Hi", "I'm wondering why my last bill was so high.", "It's 206 135 1246.", "Yes, that's right.", "Is there something cheaper for calling Portugal?"],
-  knowledgeAgent: ["Hi, how do I send you a meter reading?", "And what happens if I miss it?", "Who won the World Cup in 2018?"],
+  bikeShop: [
+    "Hi, I'd like to return a helmet I bought.",
+    "Yes, this is the number on my account.",
+    "March 14th, 1988.",
+    "The Aero commuter helmet. It's still unopened, I just don't need it.",
+    "A refund, please. Go ahead.",
+    "No, that's all. Thanks, bye.",
+  ],
+  textAgent: ["Hi, I'm wondering why my last bill was so high.", "Yes, it's the number I'm calling from.", "Is there something cheaper for calling Portugal?", "Great, that's all. Bye."],
+  simpleHandoff: ["Yes please, one about the sea."],
 };
 
 const gray = (s) => `\x1b[90m${s}\x1b[0m`;
@@ -65,7 +71,7 @@ async function run(key) {
   console.log(bold(`\n== ${key}`));
   const agents = allAgentSets[key];
   const session = new RealtimeSession({ label: "voice", connect });
-  const stats = { failed: 0, handoffs: [], tools: [], cited: [], outOfDomain: 0, errors: [] };
+  const stats = { failed: 0, handoffs: [], steps: [], tools: [], cited: [], outOfDomain: 0, ended: false, errors: [] };
   const runner = new AgentRunner({
     agents,
     session,
@@ -77,6 +83,17 @@ async function run(key) {
   runner.on("handoff", ({ from, to }) => {
     stats.handoffs.push(`${from}->${to}`);
     console.log(gray(`   handoff ${from} -> ${to}`));
+  });
+  runner.on("step", ({ from, to }) => {
+    stats.steps.push(to ?? `-${from}`);
+    console.log(gray(to ? `   step ${to}` : `   left step ${from}`));
+  });
+  runner.on("say", ({ utterance, hangup }) => {
+    console.log(`   ${runner.current.name}: ${utterance} ${gray("(fixed line)")}`);
+    if (hangup) {
+      stats.ended = true;
+      console.log(gray("   call ended"));
+    }
   });
   runner.on("breadcrumb", ({ title }) => console.log(gray(`   ${title}`)));
   session.on("tool.call", ({ call }) => {
@@ -98,11 +115,16 @@ async function run(key) {
   session.on("error", (e) => stats.errors.push(e.error?.message));
 
   const started = Date.now();
+  // The welcome message is said by the server as the first response, with no response.create.
+  const welcome = new Promise((resolve) => {
+    const off = session.on("agent.done", () => (off(), resolve()));
+    setTimeout(resolve, 10_000);
+  });
   await session.connect({ type: "realtime", output_modalities: ["text"], ...runner.sessionConfig() });
-  // The agent speaks first, as it would answering the phone.
-  session.requestResponse();
+  await welcome;
   await settled(session);
   for (const line of JOURNEYS[key]) {
+    if (stats.ended) break;
     console.log(`   caller: ${line}`);
     runner.say(line);
     await settled(session);

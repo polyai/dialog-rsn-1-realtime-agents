@@ -2,9 +2,8 @@
  * A one-off text conversation with Dialog-RSN-1 on a second session: give it instructions,
  * tools and one message, let it call tools until it answers, and return the answer.
  *
- * The chat supervisor uses this to work out what the voice agent should say, and the
- * returns agent uses it for a careful second look at an eligibility decision. It's the same
- * model as the voice session, used as a text agent.
+ * The text agent bridge uses it as a stand-in for a chat agent you already run: the same
+ * model as the voice session, used in text, with its own prompt and tools.
  */
 import { RealtimeSession } from "./session.js";
 import { asToolResult } from "./agents.js";
@@ -15,12 +14,12 @@ export async function runTextAgent(opts) {
     return await attempt(opts);
   } catch (err) {
     if (!/no session|connection closed|could not connect/.test(err.message)) throw err;
-    opts.ctx?.breadcrumb?.(`[${opts.label ?? "supervisor"}] connecting again (${err.message})`);
+    opts.ctx?.breadcrumb?.(`[${opts.label ?? "text agent"}] connecting again (${err.message})`);
     return attempt(opts);
   }
 }
 
-async function attempt({ connect, label = "supervisor", instructions, tools = [], input, ctx = {}, onSession, timeoutMs = 30_000 }) {
+async function attempt({ connect, label = "text agent", instructions, tools = [], input, ctx = {}, onSession, timeoutMs = 30_000 }) {
   const session = new RealtimeSession({
     label,
     connect,
