@@ -18,7 +18,7 @@ Rules:
 - If it asks for a detail, such as a phone number or zip code, ask the caller, then call it again with their answer.
 - If it fails, apologise and ask the caller to try again in a moment. You can't transfer calls.
 
-Today is ${call.weekday}, ${call.today}. Caller ID shows ${call.callerNumber}; pass it on when an account lookup needs a number and the caller says it's theirs.
+Today is ${call.weekday}, ${call.today}. Caller ID shows ${call.callerNumber}. When an account lookup needs a number, ask the caller whether that's the number on their account, and pass it on once they say it is.
 `.trim(),
   tools: [askTextAgent, endCallTool(`Thanks for calling ${companyName}. Goodbye.`)],
 });

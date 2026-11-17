@@ -11,7 +11,7 @@ import { RealtimeSession } from "../public/lib/session.js";
 import { AgentRunner } from "../public/lib/agents.js";
 import { allAgentSets } from "../public/scenarios/index.js";
 
-const URL = process.env.POLY_URL || "wss://api.us.poly.ai/v1/realtime";
+const URL = process.env.DIALOG_REALTIME_URL || "wss://api.studio.poly.ai/v1/realtime";
 const KEY = process.env.POLY_API_KEY;
 if (!KEY) {
   console.error("POLY_API_KEY is not set.");
@@ -38,7 +38,7 @@ const JOURNEYS = {
     "A refund, please. Go ahead.",
     "No, that's all. Thanks, bye.",
   ],
-  textAgent: ["Hi, I'm wondering why my last bill was so high.", "Yes, this is my number.", "Is there something cheaper for calling Portugal?", "Great, that's all. Bye."],
+  textAgent: ["Hi, I'm wondering why my last bill was so high.", "Yes, it's the number I'm calling from.", "Is there something cheaper for calling Portugal?", "Great, that's all. Bye."],
   simpleHandoff: ["Yes please, one about the sea."],
 };
 

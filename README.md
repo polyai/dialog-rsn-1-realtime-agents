@@ -27,7 +27,7 @@ Everything is plain JavaScript with no build step. Node runs a small relay that 
 ## Requirements
 
 - Node 22 or later
-- A Dialog-RSN-1 API key. Create one in Agent Studio, in the environment you'll call.
+- A Dialog-RSN-1 API key, from [studio.poly.ai](https://studio.poly.ai) (API Keys).
 - Chrome (the page is tested in Chrome), and headphones for voice
 
 Optional: a [Cartesia](https://cartesia.ai) key for natural-sounding voices. Without one, the page speaks with the browser's own voice.
@@ -50,15 +50,21 @@ npm run check -- knowledgeAgent    # one
 == knowledgeAgent
    helpCenter: Hi, you're through to Quillon Energy. What can I help with today?
    caller: Hi, how do I send you a meter reading?
-   tool searchHelpCenter {"query":"send meter reading"}
-   helpCenter: You can submit a reading in the app, on the website under Account then Meter readings, or by phone. They're due in the first five days of each month.
-   cited submit-meter-reading
+   helpCenter: Sure, is that for your electricity or gas meter?
+   caller: Can I give you one now? It's the electricity meter, and it says 4 8 2 1 7.
+   helpCenter: Thanks, I'll put that in now.
+   tool submitMeterReading {"utterance":"Thanks, I'll put that in now.","reading":"48217","meter":"electricity"}
+   helpCenter: Got it, I've put that in for your next bill. Anything else I can help with today?
+   caller: And what happens if I miss the date?
+   tool searchHelpCenter {"query":"missed meter reading date"}
+   helpCenter: If you miss the date, your bill will be estimated from the same month last year. It'll be marked with an E. Once you submit a reading, we'll correct the next bill and adjust any difference. Anything else?
+   cited estimated-bills
 ```
 
 ## How it works
 
 ```
-Browser (agents, tools, UI)  --ws-->  server.js  --wss-->  api.us.poly.ai/v1/realtime   (adds POLY_API_KEY)
+Browser (agents, tools, UI)  --ws-->  server.js  --wss-->  api.studio.poly.ai/v1/realtime   (adds POLY_API_KEY)
                              --ws-->  server.js  --wss-->  api.cartesia.ai              (adds CARTESIA_API_KEY)
 ```
 
@@ -261,7 +267,7 @@ What holds for every scenario here:
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
 | `POLY_API_KEY is not set` | No key in the environment or `.env` | `POLY_API_KEY=... npm start`, or copy `.env.example` to `.env` |
-| "The connection closed" right after Connect, or `npm run check` says it couldn't connect | The key is wrong, or from another environment | Create a key in Agent Studio for the environment `POLY_URL` points at |
+| "The connection closed" right after Connect, or `npm run check` says it couldn't connect | The key is wrong, or from another environment | Create a key at [studio.poly.ai](https://studio.poly.ai) (API Keys), or set `DIALOG_REALTIME_URL` to the host your key belongs to |
 | The agent greets the caller twice | Something sends `response.create` straight after the session is set up | Leave it out: the welcome message is the first response |
 | The agent interrupts itself | It hears its own voice through your speakers | Use headphones |
 | No sound | The voice is off, or the tab is muted | Check **Voice** in the toolbar and the tab's sound |

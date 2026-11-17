@@ -95,9 +95,8 @@ function transferTool(target) {
       type: "object",
       properties: {
         reason: { type: "string", description: "Why the caller needs this agent, in a few words." },
-        utterance: spoken("A short line telling the caller you're passing them on, e.g. 'Let me get you to our returns team.'"),
       },
-      required: ["reason", "utterance"],
+      required: ["reason"],
     },
   };
 }
@@ -244,7 +243,8 @@ export class AgentRunner {
     // the session sends next, is the new agent's first turn.
     this.session.update(sessionFor(target, { call: this.call }));
     this.emit("handoff", { from: from.name, to: target.name, reason });
-    return { output: { transferred_to: target.name } };
+    // Say who has the call now and why, so the new agent's first turn picks up the request.
+    return { output: { transferred_to: target.name, reason, note: `You are ${target.name} now. Carry on with the caller's request.` } };
   }
 
   /** Switch agent by hand (the agent picker, in the handoff example). */

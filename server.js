@@ -1,7 +1,7 @@
 /**
  * Serves the page and relays two WebSockets, adding the API keys on the way out.
  *
- *   Browser  ->  ws://localhost:3000/realtime  ->  wss://api.us.poly.ai/v1/realtime  (POLY_API_KEY)
+ *   Browser  ->  ws://localhost:3000/realtime  ->  wss://api.studio.poly.ai/v1/realtime  (POLY_API_KEY)
  *   Browser  ->  ws://localhost:3000/tts       ->  wss://api.cartesia.ai/tts/websocket (CARTESIA_API_KEY, optional)
  *
  * Everything else runs in the browser: the agents, their tools, the handoffs and the
@@ -15,7 +15,7 @@ import { WebSocketServer, WebSocket } from "ws";
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || "127.0.0.1";
-const POLY_URL = process.env.POLY_URL || "wss://api.us.poly.ai/v1/realtime";
+const DIALOG_REALTIME_URL = process.env.DIALOG_REALTIME_URL || "wss://api.studio.poly.ai/v1/realtime";
 const POLY_API_KEY = process.env.POLY_API_KEY;
 const CARTESIA_API_KEY = process.env.CARTESIA_API_KEY;
 const CARTESIA_URL = "wss://api.cartesia.ai/tts/websocket?cartesia_version=2025-04-16";
@@ -58,7 +58,7 @@ const server = createServer(async (req, res) => {
 });
 
 const upstreams = {
-  "/realtime": { url: POLY_URL, headers: { "X-API-KEY": POLY_API_KEY } },
+  "/realtime": { url: DIALOG_REALTIME_URL, headers: { "X-API-KEY": POLY_API_KEY } },
   ...(CARTESIA_API_KEY && { "/tts": { url: CARTESIA_URL, headers: { "X-API-Key": CARTESIA_API_KEY } } }),
 };
 
@@ -101,6 +101,6 @@ function pipe(client, { url, headers }, name) {
 
 server.listen(PORT, HOST, () => {
   console.log(`Dialog-RSN-1 realtime agents: http://localhost:${PORT}`);
-  console.log(`  model  ${POLY_URL}`);
+  console.log(`  model  ${DIALOG_REALTIME_URL}`);
   console.log(`  voice  ${CARTESIA_API_KEY ? "Cartesia (CARTESIA_API_KEY set), or the browser's own" : "the browser's own (set CARTESIA_API_KEY for Cartesia)"}`);
 });

@@ -30,7 +30,7 @@ export const articles = [
   },
   {
     name: "estimated-bills",
-    title: "Why is my bill estimated?",
+    title: "Missed a meter reading? Why bills are estimated",
     content: "If no reading arrives by the 5th, the bill is estimated from the same month last year. An estimated bill is marked with an E next to the usage. Submitting a reading at any time corrects the next bill, and any difference is credited or charged then.",
   },
   {

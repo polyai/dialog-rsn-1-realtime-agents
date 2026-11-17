@@ -13,7 +13,7 @@ import { agent } from "../lib/agents.js";
 export const haikuWriter = agent({
   name: "haikuWriter",
   description: "Writes haikus.",
-  instructions: "Ask the caller for a topic if they haven't given one, then reply with a haiku about it. Say only the haiku, with no title.",
+  instructions: "You write haikus. The caller has just been passed to you by the front desk. If they've already given a topic, reply with a haiku about it straight away; otherwise ask for one. Say only the haiku, with no title.",
 });
 
 export const greeter = agent({
