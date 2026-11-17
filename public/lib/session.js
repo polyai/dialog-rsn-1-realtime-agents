@@ -9,7 +9,7 @@
  *     the conversation. Typed text waits.
  *  2. Answer every call of a completed response, and never one from a response that was
  *     cancelled or failed. Decide by `response.done`'s status and nothing else.
- *  3. Pass `call_id` back exactly as it came (37 characters).
+ *  3. Pass `call_id` back exactly as it came.
  *  4. One `response.create` at a time. Typed text also waits while the caller is speaking,
  *     or the server is about to answer what they said, so it isn't folded into their turn.
  *
@@ -33,10 +33,14 @@ const CONNECT_TIMEOUT_MS = 12_000;
 export class RealtimeSession {
   /**
    * @param {object} opts
-   * @param {string} [opts.label] name shown in the event log, e.g. "voice" or "supervisor"
+   * @param {string} [opts.label] name shown in the event log, e.g. "voice" or "text agent"
    * @param {() => WebSocket} opts.connect opens the socket (through the relay in a browser)
    * @param {(call: object) => Promise<object>} [opts.onToolCall] answers a function call:
-   *        resolves to { output, knowledge? }. Throwing sends {"error": ...} as the output.
+   *        resolves to { output, knowledge?, remove?, system?, say? }. Throwing sends
+   *        {"error": ...} as the output. After the output: `remove` deletes an item (an old
+   *        step's prompt), `system` adds a system message (a new step's prompt), and `say`
+   *        adds a fixed assistant line, which the page speaks itself, and asks for no
+   *        follow-up response.
    */
   constructor({ label = "voice", connect, onToolCall }) {
     this.label = label;
@@ -47,6 +51,7 @@ export class RealtimeSession {
     this.calls = new Map(); // response id -> [{ itemId, call_id, name, arguments }]
     this.replies = new Map(); // response id -> { raw, clean, tag, tagDone, itemId }
     this.reports = new Map(); // response id -> { started, stopped, sent }
+    this.responseIds = new Set(); // the server's responses: only these get playback reports
     this.createResponse = true;
     this.flags = { open: false, ready: false, userSpeaking: false, awaitingAuto: false, openResponse: null, pendingCreate: 0, toolGate: 0 };
     this.state = "closed";
@@ -139,6 +144,12 @@ export class RealtimeSession {
     this.pump();
   }
 
+  /** Add a text message to the conversation, as history. */
+  addMessage(role, text) {
+    const type = role === "assistant" ? "output_text" : "input_text";
+    this.send({ type: "conversation.item.create", item: { type: "message", role, content: [{ type, text }] } });
+  }
+
   /** Caller audio, already in the session's input format, base64-encoded. */
   appendAudio(base64) {
     this.send({ type: "input_audio_buffer.append", audio: base64 });
@@ -157,7 +168,7 @@ export class RealtimeSession {
     while (this.queue.length && this.canSend()) {
       const op = this.queue.shift();
       if (op.kind === "text") {
-        this.send({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text: op.text }] } });
+        this.addMessage("user", op.text);
       }
       this.createNow();
     }
@@ -204,6 +215,7 @@ export class RealtimeSession {
 
       case "response.created":
         f.openResponse = event.response.id;
+        this.responseIds.add(event.response.id);
         f.awaitingAuto = false;
         if (f.pendingCreate) f.pendingCreate--;
         if (!f.pendingCreate) clearTimeout(this.createTimer);
@@ -280,13 +292,27 @@ export class RealtimeSession {
         result = { output: { error: `${err.name}: ${err.message}` } };
       }
       const output = typeof result.output === "string" ? result.output : JSON.stringify(result.output ?? "");
-      outputs.push({ call, output, knowledge: result.knowledge });
+      outputs.push({ call, ...result, output });
       this.emit("tool.result", { call, output: result.output, knowledge: result.knowledge, ms: Math.round(performance.now() - started) });
     }
-    for (const { call, output, knowledge } of outputs) {
+    for (const { call, output, knowledge, remove, system, say } of outputs) {
       const item = { type: "function_call_output", call_id: call.call_id, output }; // rule 3: call_id as given
       if (knowledge?.length) item.poly_knowledge = knowledge;
       this.send({ type: "conversation.item.create", item });
+      // A flow step: only the current step's prompt stays in the history, at the point the
+      // step was entered.
+      if (remove) this.send({ type: "conversation.item.delete", item_id: remove });
+      if (system) this.addMessage("system", system);
+      // A fixed line from the tool: history only (the server never speaks an assistant item
+      // you add), so the page says it.
+      if (say) this.addMessage("assistant", say);
+    }
+    if (outputs.some((o) => o.say)) {
+      // The tool already gave the agent's turn, so there's no follow-up response: the call
+      // waits for the caller, or ends.
+      f.toolGate -= calls.length;
+      this.pump();
+      return;
     }
     // The follow-up goes out before anything queued: the gate is still shut until it's sent.
     this.createNow();
@@ -346,7 +372,7 @@ export class RealtimeSession {
 
   playbackStarted(responseId) {
     const r = this.reportFor(responseId);
-    if (r.started) return;
+    if (r.started || r.local) return;
     r.started = true;
     this.send({ type: "poly.output_audio.started", response_id: responseId });
   }
@@ -371,7 +397,9 @@ export class RealtimeSession {
     });
   }
 
+  /** A line the page says on its own (a tool's fixed line) has no response to report on. */
   reportFor(responseId) {
+    if (!this.responseIds.has(responseId)) return { started: false, stopped: true, sent: 0, local: true };
     if (!this.reports.has(responseId)) this.reports.set(responseId, { started: false, stopped: false, sent: 0 });
     return this.reports.get(responseId);
   }

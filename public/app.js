@@ -176,10 +176,10 @@ async function connect() {
     agents: allAgentSets[scenarioKey],
     start: agentName,
     session,
-    // Tools that open sessions of their own (the supervisor, the returns reviewer) use these.
+    // A tool that opens a session of its own (the text agent bridge) uses these.
     extras: { connect: relay, onSession: (s) => log.attach(s) },
   });
-  call = { session, runner, voice: null, mic: null, talking: false };
+  call = { session, runner, voice: null, mic: null, talking: false, ending: false };
   log.attach(session);
   bind(session, runner);
 
@@ -212,9 +212,14 @@ async function connect() {
       audio: { input: { format: format.format, turn_detection: { type: "server_vad", create_response: true } } },
       ...runner.sessionConfig(),
     });
-    transcript.crumb(`Agent: ${runner.current.name}`, { instructions: runner.current.instructions, tools: runner.sessionConfig().tools.map((t) => t.name) }, "handoff");
-    // The agent speaks first, as it would answering the phone.
-    session.requestResponse();
+    const config = runner.sessionConfig();
+    transcript.crumb(
+      `Agent: ${runner.current.name}`,
+      { instructions: config.instructions, welcome_message: config.poly_first_assistant_message, tools: config.tools.map((t) => t.name), knowledge: config.poly_knowledge?.map((k) => k.name) },
+      "handoff",
+    );
+    // No response.create: the server says the welcome message (poly_first_assistant_message)
+    // as the first response, as soon as the session is ready.
     button.textContent = "Disconnect";
     button.classList.add("connected");
     $("text").disabled = false;
@@ -247,12 +252,28 @@ function disconnect(reason) {
   $("level").style.width = "0";
 }
 
+/**
+ * A terminal tool ended the call. Stop listening now, let the last line play, then hang up.
+ */
+function hangUp(lineId) {
+  const c = call;
+  c.ending = true;
+  c.lastLine = lineId;
+  c.mic?.stop();
+  c.mic = null;
+  // After this tick, once the session has sent the tool's output and the line into history.
+  setTimeout(() => c.session.close(), 0);
+  // In case the voice never reports the end of the line.
+  setTimeout(() => call === c && disconnect("The agent ended the call"), 15_000);
+}
+
 async function makeVoice(session) {
   const [kind, id] = $("voice").value.split(/:(.*)/s);
   const onSpeaking = ({ id: rid, speaking: on, heard, interrupted }) => {
     speaking = Math.max(0, speaking + (on ? 1 : -1));
     setStatus(session.state);
     if (interrupted) transcript.heard(rid, heard);
+    if (!on && call?.ending && rid === call.lastLine) disconnect("The agent ended the call");
   };
   if (kind === "cartesia") {
     const voice = new CartesiaVoice({ session, voiceId: id, url: wsUrl("/tts"), onSpeaking });
@@ -302,7 +323,7 @@ function bind(session, runner) {
   session.on("error", (e) => transcript.crumb(`Error: ${e.error?.message ?? "unknown"}`, e.error, "error"));
   session.on("state", ({ state }) => setStatus(state));
   session.on("close", ({ code, reason }) => {
-    if (call?.session === session) disconnect(`The connection closed (${code}${reason ? `: ${reason}` : ""})`);
+    if (call?.session === session && !call.ending) disconnect(`The connection closed (${code}${reason ? `: ${reason}` : ""})`);
   });
 
   runner.on("handoff", ({ from, to, reason }) => {
@@ -311,6 +332,17 @@ function bind(session, runner) {
     fillPickers();
   });
   runner.on("breadcrumb", ({ title, data }) => transcript.crumb(title, data));
+  runner.on("step", ({ from, to, prompt }) => transcript.crumb(to ? `Step: ${to}` : `Left step ${from}`, prompt ? { prompt: prompt.trim() } : null, "handoff"));
+  // A tool's fixed line: said word for word by the page, with no reply generated for it.
+  let said = 0;
+  runner.on("say", ({ utterance, hangup }) => {
+    const id = `said_${++said}`;
+    transcript.agentText(id, runner.current.name, utterance);
+    if (hangup) hangUp(id);
+    call?.voice?.push(id, `${utterance} `);
+    call?.voice?.finish(id);
+    if (hangup && !call?.voice) disconnect("The agent ended the call");
+  });
 }
 
 const STATUS = {
@@ -336,7 +368,7 @@ function showEmpty() {
   div.className = "empty";
   div.innerHTML = `<p><b></b></p><p></p><p>Press <b>Connect</b> and start talking, or type below. Use headphones, so the agent doesn't hear itself.</p>`;
   div.querySelector("b").textContent = labels[scenarioKey] ?? scenarioKey;
-  div.querySelectorAll("p")[1].textContent = `Starts with ${first.name}: ${first.handoffDescription}`;
+  div.querySelectorAll("p")[1].textContent = first.description;
   $("transcript").append(div);
 }
 
