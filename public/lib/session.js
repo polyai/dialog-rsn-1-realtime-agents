@@ -139,12 +139,6 @@ export class RealtimeSession {
     this.pump();
   }
 
-  /** Ask for a response without adding a turn, e.g. so a new agent speaks first. */
-  requestResponse() {
-    this.queue.push({ kind: "respond" });
-    this.pump();
-  }
-
   /** Add a text message to the conversation, as history. */
   addMessage(role, text) {
     const type = role === "assistant" ? "output_text" : "input_text";

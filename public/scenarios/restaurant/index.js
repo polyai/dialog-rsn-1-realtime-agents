@@ -67,7 +67,7 @@ Today is ${call.weekday}, ${call.today}. The coming week: ${week(call.today)}. "
       description: "Search the restaurant's guide: the two tasting menus, the wine list, sake and spirits, cocktails, and the chefs and sommeliers. The best matching sections come back as knowledge.",
       parameters: {
         type: "object",
-        properties: { query: { type: "string", description: "What the guest wants to know, in a few words." } },
+        properties: { query: { type: "string", description: "What the guest wants to know, in a few English words, whatever language the call is in." } },
         required: ["query"],
       },
       execute: ({ query }) => {

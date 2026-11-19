@@ -106,7 +106,8 @@ const schema = ({ name, description, parameters }) => ({ type: "function", name,
 export function callContext(a, date = new Date()) {
   return {
     callerNumber: a.callerNumber ?? null,
-    today: date.toISOString().slice(0, 10),
+    // The caller's local date, so it agrees with the weekday below (UTC can be a day ahead).
+    today: date.toLocaleDateString("en-CA"),
     weekday: date.toLocaleDateString("en-US", { weekday: "long" }),
   };
 }
@@ -140,11 +141,8 @@ export class AgentRunner {
     this.stepItemId = null;
     this.state = {}; // per-call state the tools share, e.g. the verified customer
     this.session = session;
-    this.history = [];
     this.handlers = new Map();
     session.onToolCall = (call) => this.onToolCall(call);
-    session.on("agent.done", ({ text }) => text && this.history.push({ role: "assistant", text }));
-    session.on("conversation.item.input_audio_transcription.completed", (e) => e.transcript && this.history.push({ role: "user", text: e.transcript }));
     // The step prompt's item id, so the next step can remove it: only the current step's
     // prompt stays in the history.
     session.on("conversation.item.added", ({ item }) => {
@@ -177,7 +175,6 @@ export class AgentRunner {
 
   /** A typed caller turn. */
   say(text) {
-    this.history.push({ role: "user", text });
     this.session.sendText(text);
   }
 
@@ -190,7 +187,6 @@ export class AgentRunner {
       step: this.step,
       call: this.call,
       state: this.state,
-      history: [...this.history],
       breadcrumb: (title, data) => this.emit("breadcrumb", { title, data }),
     };
     const result = await t.execute(call.args ?? {}, ctx);
@@ -206,7 +202,6 @@ export class AgentRunner {
     if (result.say) {
       out.say = result.say;
       out.hangup = result.hangup ?? false;
-      this.history.push({ role: "assistant", text: result.say });
       this.emit("say", { utterance: result.say, hangup: out.hangup });
     } else if (result.hangup) {
       out.hangup = true;

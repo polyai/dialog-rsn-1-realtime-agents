@@ -79,6 +79,7 @@ export function createBooking(book, args, today) {
   const minutes = toMinutes(args.time);
   if (!args.name) return { error: "missing_name", detail: "Ask the guest for a name first." };
   if (minutes === null) return { error: "invalid_time", detail: "Confirm the time with the guest." };
+  if (party > 12) return { error: "too_large", detail: "Parties over 12 go through the Maitre d', Ghislaine." };
   const area = AREAS.includes(args.area) ? (fits(book, day, minutes, args.area, party) ? args.area : null) : AREAS.find((a) => fits(book, day, minutes, a, party));
   if (!area) return { error: "slot_gone", detail: "That slot has just gone. Offer the guest another time." };
   const booking = {

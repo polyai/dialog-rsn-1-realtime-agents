@@ -171,7 +171,7 @@ Use it on tools that are slow or change something: `create_booking`, `create_ret
 
 ### Saying nothing
 
-Sometimes the right turn is silence. A tool that returns `quiet(output)` puts its output in the history and asks for no reply, so the agent keeps listening. The restaurant's `hold(utterance)` is one: when the caller asks the agent to hold on while they check with someone, its `poly_spoken` line ("Of course, take your time.") is said, then nothing more until the caller comes back.
+Sometimes the right turn is silence. A tool that returns `quiet(output)` puts its output in the history and asks for no reply, so the agent keeps listening. The restaurant's `hold(utterance)` is one: when the caller asks the agent to hold on while they check with someone, its `poly_spoken` line ("Of course, take your time.") is said, and no reply follows the tool. On a voice call, speech the server picks up while the caller is away still starts a response as usual, so the tool's output also tells the model to say nothing until the caller talks to it again.
 
 ### Answering in another language
 
