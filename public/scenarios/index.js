@@ -12,7 +12,7 @@ export const scenarios = {
 export const defaultScenario = "restaurant";
 
 export const labels = {
-  restaurant: "Restaurant: bookings, knowledge and hold",
+  restaurant: "Restaurant: bookings, knowledge and French",
   knowledgeAgent: "Knowledge agent",
   bikeShop: "Bike shop: one agent with a flow",
 };

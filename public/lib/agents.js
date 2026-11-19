@@ -13,7 +13,6 @@
  *                                   write a reply to this tool
  *   endCall(utterance, output)      say the line, then hang up
  *   hangUp(output)                  hang up once this turn's spoken line has played
- *   quiet(output)                   no reply at all: the agent keeps listening
  *   setSession(fields, output)      change session fields first, e.g. poly_response_language
  */
 
@@ -52,13 +51,6 @@ export const endCall = (utterance, output = { ok: true }) => new ToolResult({ ou
  * it calls the tool. Nothing is said after it.
  */
 export const hangUp = (output = { ok: true }) => new ToolResult({ output, hangup: true });
-
-/**
- * Say nothing more: the output goes into the history and no response follows it, so the
- * agent keeps listening, e.g. after "hold on a moment". A
- * `poly_spoken` argument on the tool is still said while it runs.
- */
-export const quiet = (output = { ok: true }) => new ToolResult({ output, quiet: true });
 
 /** Update the session (e.g. `poly_response_language`) before the output goes back. */
 export const setSession = (fields, output = { ok: true }) => new ToolResult({ output, session: fields });
@@ -192,7 +184,7 @@ export class AgentRunner {
     const result = await t.execute(call.args ?? {}, ctx);
     if (!(result instanceof ToolResult)) return { output: result ?? "" };
 
-    const out = { output: result.output, knowledge: result.knowledge, quiet: result.quiet };
+    const out = { output: result.output, knowledge: result.knowledge };
     if (result.session) {
       // Before the output goes back, so the follow-up response already has the change.
       this.session.update(result.session);

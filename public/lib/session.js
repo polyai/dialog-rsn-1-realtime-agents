@@ -36,11 +36,11 @@ export class RealtimeSession {
    * @param {string} [opts.label] name shown in the event log, e.g. "voice"
    * @param {() => WebSocket} opts.connect opens the socket (through the relay in a browser)
    * @param {(call: object) => Promise<object>} [opts.onToolCall] answers a function call:
-   *        resolves to { output, knowledge?, remove?, system?, say?, quiet?, hangup? }. Throwing sends
+   *        resolves to { output, knowledge?, remove?, system?, say?, hangup? }. Throwing sends
    *        {"error": ...} as the output. After the output: `remove` deletes an item (an old
    *        step's prompt), `system` adds a system message (a new step's prompt), and `say`
    *        adds a fixed assistant line, which the page speaks itself, and asks for no
-   *        follow-up response. `quiet` and `hangup` ask for no follow-up response either.
+   *        follow-up response. `hangup` asks for no follow-up response either.
    */
   constructor({ label = "voice", connect, onToolCall }) {
     this.label = label;
@@ -302,7 +302,7 @@ export class RealtimeSession {
       // you add), so the page says it.
       if (say) this.addMessage("assistant", say);
     }
-    if (outputs.some((o) => o.say || o.hangup) || outputs.every((o) => o.quiet)) {
+    if (outputs.some((o) => o.say || o.hangup)) {
       // The tool already gave the agent's turn, or asked for silence, so there's no
       // follow-up response: the call waits for the caller, or ends.
       f.toolGate -= calls.length;

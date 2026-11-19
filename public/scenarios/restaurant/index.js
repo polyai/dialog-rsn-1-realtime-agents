@@ -7,11 +7,10 @@
  *   the guide's longer sections as `poly_knowledge` on its output. The page shows the topics
  *   each answer cites (`poly_cited_topics`);
  * - a booking read back before it's made, with a line said while it's written (`poly_spoken`);
- * - `hold`, which says one line and then nothing more while the caller checks with someone;
  * - `switch_language`, which sets `poly_response_language`;
  * - a transfer to a person, and an end_call.
  */
-import { agent, tool, spoken, withKnowledge, quiet, setSession } from "../../lib/agents.js";
+import { agent, tool, spoken, withKnowledge, setSession } from "../../lib/agents.js";
 import { transferCallTool, endCallTool } from "../../lib/callTools.js";
 import { keywordSearch, asTopic } from "../../lib/search.js";
 import { restaurantName, always, guide } from "./knowledge.js";
@@ -36,7 +35,7 @@ function week(today) {
 
 export const margaux = agent({
   name: "margaux",
-  description: "A restaurant's phone line: answers from its guide, books tables, holds while the caller checks with friends, speaks French on request.",
+  description: "A restaurant's phone line: answers from its guide, books tables, speaks French on request.",
   callerNumber: "+44 20 7946 0321",
   voice: "25d7abcb-4d6d-4aca-adce-8a1c85620c8b", // Cartesia "Jessica", feminine, as in the poly.ai playground
   welcomeMessage: `${restaurantName}, this is Margaux. How can I help?`,
@@ -53,8 +52,6 @@ Rules:
 - Before create_booking, read the details back in one sentence (day, time, party size and name) and book once the guest agrees. Then give the reference from what create_booking returned, letter by letter and digit by digit.
 - Guests are often booking a celebration: when they mention one, be glad for them and put it in the notes.
 - Never call the guest by their surname. A first name, sparingly, is fine.
-
-If the guest asks you to hold on while they check with someone, call hold with a short reply such as "Of course, take your time."
 
 You speak English and French. If the guest speaks French, or asks for it, call switch_language.
 
@@ -105,19 +102,6 @@ Today is ${call.weekday}, ${call.today}. The coming week: ${week(call.today)}. "
         const result = createBooking((ctx.state.book ??= []), args, ctx.call.today);
         if (result.booked) ctx.breadcrumb(`Booked ${result.reference}`, result);
         return result;
-      },
-    }),
-    tool({
-      name: "hold",
-      description: "The guest asked you to hold on while they check with someone. Say a short line and wait for them to come back.",
-      parameters: {
-        type: "object",
-        properties: { utterance: spoken("A short reply, e.g. 'Of course, take your time.'") },
-        required: ["utterance"],
-      },
-      execute: (_, ctx) => {
-        ctx.breadcrumb("On hold");
-        return quiet({ on_hold: true, note: "Say nothing more until the guest talks to you again." });
       },
     }),
     tool({

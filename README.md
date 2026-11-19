@@ -17,7 +17,7 @@ Open http://localhost:3000, press **Connect** and start talking. Use headphones,
 
 | Scenario | What it shows |
 | --- | --- |
-| **Restaurant: bookings, knowledge and hold** | Margaux at Maison Lumiere, the restaurant from the playground on poly.ai. She answers from always-on topics and a searchable guide, citing what she used, checks availability and reads a booking back before making it, holds while the caller checks with someone, and switches to French on request. Start here. |
+| **Restaurant: bookings, knowledge and French** | Margaux at Maison Lumiere, the restaurant from the playground on poly.ai. She answers from always-on topics and a searchable guide, citing what she used, checks availability and reads a booking back before making it, and switches to French on request. Start here. |
 | **Knowledge agent** | An energy supplier's help line. It answers from its help center, takes a meter reading when a topic's action says to, and transfers to a person or ends the call. The page shows which articles each answer cited. |
 | **Bike shop: one agent with a flow** | A bike shop's phone line. It verifies the caller with one function, handles a return in a flow step with a policy check in code, sells from the sale by following a topic, and ends with a transfer or a goodbye. |
 
@@ -169,10 +169,6 @@ utterance: spoken("A short line while it's set up, e.g. 'Great, I'll set that up
 
 Use it on tools that are slow or change something: `create_booking`, `create_return`, `send_checkout_link`, `submitMeterReading`, and the two that end the call. Leave it off fast lookups and step changes. On a fast tool it makes the first audio earlier but the answer later.
 
-### Saying nothing
-
-Sometimes the right turn is silence. A tool that returns `quiet(output)` puts its output in the history and asks for no reply, so the agent keeps listening. The restaurant's `hold(utterance)` is one: when the caller asks the agent to hold on while they check with someone, its `poly_spoken` line ("Of course, take your time.") is said, and no reply follows the tool. On a voice call, speech the server picks up while the caller is away still starts a response as usual, so the tool's output also tells the model to say nothing until the caller talks to it again.
-
 ### Answering in another language
 
 `poly_response_language` sets the language the model answers in: an ISO tag like `fr-FR`, or plain words. The restaurant's `switch_language` tool returns `setSession({ poly_response_language: "fr-FR" })`, which updates the session before the tool's output goes back, so the very next reply is in French. The page switches the voice's language to match.
@@ -210,7 +206,7 @@ To port a scenario, put what the agents share in one prompt, turn each specialis
 - **Events**, on the right: every event to and from the session. Click one for its payload, or filter by type.
 - **Toolbar**: connect, push to talk, the voice ("Agent's voice" is the agent's own), the input audio format, and the event log.
 
-To try the restaurant, book a table for Friday evening, ask her to hold on while you check with someone, ask what's on the Omakase menu, or ask for a private room for twenty. To try the bike shop, say you'd like to return the helmet you bought, and that the number you're calling from is the one on your account. The test customer is Jordan, born 14 March 1988.
+To try the restaurant, book a table for Friday evening, ask what's on the Omakase menu, or ask for a private room for twenty. To try the bike shop, say you'd like to return the helmet you bought, and that the number you're calling from is the one on your account. The test customer is Jordan, born 14 March 1988.
 
 **Input audio** sets what the microphone sends. PCM at 16 kHz is Dialog-RSN-1's native rate. PCM at 8 kHz and G.711 (μ-law and A-law) are what a phone line carries, so you can hear how an agent copes with call-quality audio:
 

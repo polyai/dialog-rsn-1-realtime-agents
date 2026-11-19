@@ -25,8 +25,6 @@ const connect = () => new WebSocket(URL, { headers: { "X-API-KEY": KEY, "User-Ag
 const JOURNEYS = {
   restaurant: [
     "Hi, I'd like to book a table for Friday at half seven, for four people.",
-    "Let me just check with my wife, hold on a sec.",
-    "Sorry, I'm back. Yes, that works.",
     "It's for Sam Okafor. Oh, and it's her birthday, and one of us is gluten free.",
     "Yes, that's right.",
     "What's on the Omakase menu?",

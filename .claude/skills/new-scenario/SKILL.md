@@ -5,7 +5,7 @@ description: Write a new Dialog-RSN-1 voice agent scenario for this repo (one ag
 
 # Write a new scenario
 
-You're adding a scenario to `public/scenarios/`. Read `public/scenarios/bikeShop/` before writing: it's the pattern to follow for a flow step. `restaurant/` shows always-on topics plus a searchable guide, a booking read back before it's made, a `hold` tool that then says nothing and a language switch. `knowledgeAgent/` shows a help center search. Every scenario is one agent: never split a call across agents that hand over to each other.
+You're adding a scenario to `public/scenarios/`. Read `public/scenarios/bikeShop/` before writing: it's the pattern to follow for a flow step. `restaurant/` shows always-on topics plus a searchable guide, a booking read back before it's made, and a language switch. `knowledgeAgent/` shows a help center search. Every scenario is one agent: never split a call across agents that hand over to each other.
 
 ## 1. Ask, briefly
 
@@ -19,7 +19,7 @@ Then write it all without further questions. Everything is made up: invent a com
 
 ## 2. Write the files
 
-One folder, `public/scenarios/<key>/`: `index.js` with `export default theAgent`, and `data.js` for test data and topics. Use `agent()`, `tool()`, `spoken()`, `withKnowledge()`, `goToStep()`, `sayExactly()`, `quiet()` and `setSession()` from `../../lib/agents.js`, `keywordSearch()` and `asTopic()` from `../../lib/search.js`, and `transferCallTool()` and `endCallTool()` from `../../lib/callTools.js`.
+One folder, `public/scenarios/<key>/`: `index.js` with `export default theAgent`, and `data.js` for test data and topics. Use `agent()`, `tool()`, `spoken()`, `withKnowledge()`, `goToStep()`, `sayExactly()` and `setSession()` from `../../lib/agents.js`, `keywordSearch()` and `asTopic()` from `../../lib/search.js`, and `transferCallTool()` and `endCallTool()` from `../../lib/callTools.js`.
 
 One agent runs the whole call:
 
@@ -46,7 +46,6 @@ Functions:
 - Give a `spoken()` argument named `utterance` only to tools that are slow or change something (create, send, book, submit). Not to lookups or step changes.
 - Validate against the test data and return a clear `{ error }` or `{ found: 0 }` when nothing matches.
 - A tool that should answer with a fixed line returns `sayExactly(line, output)`. `transfer_call` and `end_call` end the call after the model's own spoken line.
-- A tool for a turn that needs no reply (the caller asked the agent to hold) returns `quiet(output)`.
 
 ## 3. Register and check
 
