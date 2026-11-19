@@ -8,13 +8,14 @@ import { BrowserVoice, CartesiaVoice, CARTESIA_VOICES } from "./lib/speech.js";
 import { INPUT_FORMATS, startMic } from "./lib/audio/mic.js";
 import { Transcript } from "./lib/ui/transcript.js";
 import { EventLog } from "./lib/ui/events.js";
-import { allAgentSets, defaultAgentSetKey, labels } from "./scenarios/index.js";
+import { scenarios, defaultScenario, labels } from "./scenarios/index.js";
 
 const $ = (id) => document.getElementById(id);
-const wsUrl = (path) => `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${path}`;
-const relay = () => new WebSocket(wsUrl("/realtime"));
+// Paths are relative to the page, so it also works behind a proxy that mounts it under a prefix.
+const wsUrl = (path) => new URL(path, location.href).href.replace(/^http/, "ws");
+const relay = () => new WebSocket(wsUrl("realtime"));
 
-const server = await fetch("/config").then((r) => r.json()).catch(() => ({ cartesia: false }));
+const server = await fetch("config").then((r) => r.json()).catch(() => ({ cartesia: false }));
 const transcript = new Transcript($("transcript"));
 const log = new EventLog($("events"), $("eventFilter"));
 
@@ -33,37 +34,25 @@ function savePrefs() {
   } catch {}
 }
 
-// ---- Scenario and agent pickers ----------------------------------------------------------
+// ---- Scenario picker --------------------------------------------------------------------
 
 const params = new URLSearchParams(location.search);
-let scenarioKey = allAgentSets[params.get("scenario")] ? params.get("scenario") : defaultAgentSetKey;
-let agentName = params.get("agent");
+let scenarioKey = scenarios[params.get("scenario")] ? params.get("scenario") : defaultScenario;
 
-function fillPickers() {
-  $("scenario").replaceChildren(...Object.keys(allAgentSets).map((k) => new Option(labels[k] ?? k, k)));
+function fillPicker() {
+  $("scenario").replaceChildren(...Object.keys(scenarios).map((k) => new Option(labels[k] ?? k, k)));
   $("scenario").value = scenarioKey;
-  const agents = allAgentSets[scenarioKey];
-  if (!agents.some((a) => a.name === agentName)) agentName = agents[0].name;
-  $("agent").replaceChildren(...agents.map((a) => new Option(a.name, a.name)));
-  $("agent").value = agentName;
   const url = new URL(location.href);
   url.searchParams.set("scenario", scenarioKey);
-  url.searchParams.set("agent", agentName);
+  url.searchParams.delete("agent");
   history.replaceState(null, "", url);
 }
 
 $("scenario").addEventListener("change", () => {
   scenarioKey = $("scenario").value;
-  agentName = null;
   if (call) disconnect();
-  fillPickers();
+  fillPicker();
   showEmpty();
-});
-
-$("agent").addEventListener("change", () => {
-  agentName = $("agent").value;
-  if (call) call.runner.switchTo(agentName);
-  fillPickers();
 });
 
 // ---- Toolbar ---------------------------------------------------------------------------
@@ -75,11 +64,11 @@ $("voiceOn").checked = prefs.voiceOn ?? true;
 $("logs").checked = prefs.logs ?? true;
 document.querySelector("main").classList.toggle("no-logs", !$("logs").checked);
 
+// "Agent's voice" speaks each agent in its own Cartesia voice; the rest override it.
 function fillVoices() {
-  const options = [];
+  const options = [new Option("Agent's voice", "agent")];
   if (server.cartesia) for (const v of CARTESIA_VOICES) options.push(new Option(`Cartesia: ${v.label}`, `cartesia:${v.id}`));
   for (const v of BrowserVoice.voices()) options.push(new Option(`Browser: ${v.name}`, `browser:${v.name}`));
-  if (!options.length) options.push(new Option("Browser: default", "browser:"));
   $("voice").replaceChildren(...options);
   $("voice").value = options.some((o) => o.value === prefs.voice) ? prefs.voice : options[0].value;
 }
@@ -172,14 +161,8 @@ async function connect() {
   setStatus("connecting");
 
   const session = new RealtimeSession({ label: "voice", connect: relay });
-  const runner = new AgentRunner({
-    agents: allAgentSets[scenarioKey],
-    start: agentName,
-    session,
-    // A tool that opens a session of its own (the text agent bridge) uses these.
-    extras: { connect: relay, onSession: (s) => log.attach(s) },
-  });
-  call = { session, runner, voice: null, mic: null, talking: false, ending: false };
+  const runner = new AgentRunner({ agent: scenarios[scenarioKey], session });
+  call = { session, runner, voice: null, mic: null, talking: false, ending: false, language: null };
   log.attach(session);
   bind(session, runner);
 
@@ -214,9 +197,9 @@ async function connect() {
     });
     const config = runner.sessionConfig();
     transcript.crumb(
-      `Agent: ${runner.current.name}`,
+      `Agent: ${runner.agent.name}`,
       { instructions: config.instructions, welcome_message: config.poly_first_assistant_message, tools: config.tools.map((t) => t.name), knowledge: config.poly_knowledge?.map((k) => k.name) },
-      "handoff",
+      "marker",
     );
     // No response.create: the server says the welcome message (poly_first_assistant_message)
     // as the first response, as soon as the session is ready.
@@ -268,7 +251,8 @@ function hangUp(lineId) {
 }
 
 async function makeVoice(session) {
-  const [kind, id] = $("voice").value.split(/:(.*)/s);
+  let [kind, id] = $("voice").value.split(/:(.*)/s);
+  if (kind === "agent") [kind, id] = server.cartesia && call.runner.agent.voice ? ["cartesia", call.runner.agent.voice] : ["browser", ""];
   const onSpeaking = ({ id: rid, speaking: on, heard, interrupted }) => {
     speaking = Math.max(0, speaking + (on ? 1 : -1));
     setStatus(session.state);
@@ -276,9 +260,10 @@ async function makeVoice(session) {
     if (!on && call?.ending && rid === call.lastLine) disconnect("The agent ended the call");
   };
   if (kind === "cartesia") {
-    const voice = new CartesiaVoice({ session, voiceId: id, url: wsUrl("/tts"), onSpeaking });
+    const voice = new CartesiaVoice({ session, voiceId: id, url: wsUrl("tts"), onSpeaking });
     try {
       await voice.start();
+      if (call.language) voice.setLanguage(call.language);
       return voice;
     } catch (err) {
       transcript.crumb(`Cartesia unavailable (${err.message}). Using the browser's voice.`, null, "warn");
@@ -286,6 +271,7 @@ async function makeVoice(session) {
   }
   const voice = new BrowserVoice({ session, voiceName: kind === "browser" ? id : undefined, onSpeaking });
   await voice.start();
+  if (call.language) voice.setLanguage(call.language);
   return voice;
 }
 
@@ -306,7 +292,7 @@ function bind(session, runner) {
   session.on("conversation.item.input_audio_transcription.completed", (e) => transcript.user(e.item_id, e.transcript));
 
   session.on("agent.delta", ({ responseId, delta, text }) => {
-    transcript.agentText(responseId, runner.current.name, text);
+    transcript.agentText(responseId, runner.agent.name, text);
     call?.voice?.push(responseId, delta);
   });
   session.on("agent.done", ({ responseId }) => call?.voice?.finish(responseId));
@@ -326,22 +312,29 @@ function bind(session, runner) {
     if (call?.session === session && !call.ending) disconnect(`The connection closed (${code}${reason ? `: ${reason}` : ""})`);
   });
 
-  runner.on("handoff", ({ from, to, reason }) => {
-    transcript.crumb(`Handoff: ${from} → ${to}`, { reason, instructions: runner.current.instructions }, "handoff");
-    agentName = to;
-    fillPickers();
+  // The agent switched language (poly_response_language): the voice follows, "fr-FR" -> "fr".
+  runner.on("session", ({ fields }) => {
+    if (!fields.poly_response_language || !call) return;
+    call.language = fields.poly_response_language.slice(0, 2).toLowerCase();
+    call.voice?.setLanguage(call.language);
   });
   runner.on("breadcrumb", ({ title, data }) => transcript.crumb(title, data));
-  runner.on("step", ({ from, to, prompt }) => transcript.crumb(to ? `Step: ${to}` : `Left step ${from}`, prompt ? { prompt: prompt.trim() } : null, "handoff"));
+  runner.on("step", ({ from, to, prompt }) => transcript.crumb(to ? `Step: ${to}` : `Left step ${from}`, prompt ? { prompt: prompt.trim() } : null, "marker"));
   // A tool's fixed line: said word for word by the page, with no reply generated for it.
   let said = 0;
   runner.on("say", ({ utterance, hangup }) => {
     const id = `said_${++said}`;
-    transcript.agentText(id, runner.current.name, utterance);
+    transcript.agentText(id, runner.agent.name, utterance);
     if (hangup) hangUp(id);
     call?.voice?.push(id, `${utterance} `);
     call?.voice?.finish(id);
     if (hangup && !call?.voice) disconnect("The agent ended the call");
+  });
+  // A terminal tool whose last line was the model's own (its poly_spoken argument): hang up
+  // once that response has been heard.
+  runner.on("hangup", ({ responseId }) => {
+    hangUp(responseId);
+    if (!call?.voice?.has(responseId)) disconnect("The agent ended the call");
   });
 }
 
@@ -363,14 +356,14 @@ function setStatus(state) {
 
 function showEmpty() {
   transcript.clear();
-  const first = allAgentSets[scenarioKey][0];
+  const agent = scenarios[scenarioKey];
   const div = document.createElement("div");
   div.className = "empty";
   div.innerHTML = `<p><b></b></p><p></p><p>Press <b>Connect</b> and start talking, or type below. Use headphones, so the agent doesn't hear itself.</p>`;
   div.querySelector("b").textContent = labels[scenarioKey] ?? scenarioKey;
-  div.querySelectorAll("p")[1].textContent = first.description;
+  div.querySelectorAll("p")[1].textContent = agent.description;
   $("transcript").append(div);
 }
 
-fillPickers();
+fillPicker();
 showEmpty();

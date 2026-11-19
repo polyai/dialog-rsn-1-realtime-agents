@@ -2,8 +2,8 @@
  * Agents, tools and flow steps.
  *
  * An agent is what a call runs on from start to finish: one system prompt, a welcome message,
- * always-on knowledge, and tools. The prompt never changes during the call. Where a process
- * needs one, a tool moves the call into a flow step: the step's prompt goes into the
+ * a voice, always-on knowledge, and tools. The prompt never changes during the call. Where a
+ * process needs one, a tool moves the call into a flow step: the step's prompt goes into the
  * history at that point, as a system message, and the tools change to the step's.
  *
  * A tool's `execute(args, ctx)` returns plain data for the model, or one of these:
@@ -12,9 +12,8 @@
  *   sayExactly(utterance, output)   the page says this line word for word; the model doesn't
  *                                   write a reply to this tool
  *   endCall(utterance, output)      say the line, then hang up
- *
- * Handoffs between agents (`handoffs: [...]`) are here for one example only, the one for
- * developers moving from openai-realtime-agents. See the README for what each costs.
+ *   hangUp(output)                  hang up once this turn's spoken line has played
+ *   setSession(fields, output)      change session fields first, e.g. poly_response_language
  */
 
 /** A function tool. `execute(args, ctx)` returns the output, or one of the helpers above. */
@@ -48,23 +47,33 @@ export const sayExactly = (utterance, output = { ok: true }) => new ToolResult({
 export const endCall = (utterance, output = { ok: true }) => new ToolResult({ output, say: utterance, hangup: true });
 
 /**
+ * End the call after the model's own last line: the tool's `poly_spoken` argument, said as
+ * it calls the tool. Nothing is said after it.
+ */
+export const hangUp = (output = { ok: true }) => new ToolResult({ output, hangup: true });
+
+/** Update the session (e.g. `poly_response_language`) before the output goes back. */
+export const setSession = (fields, output = { ok: true }) => new ToolResult({ output, session: fields });
+
+/**
  * @param {object} a
  * @param {string} a.name
  * @param {string} [a.description] one line, shown in the page
  * @param {string | ((call: CallContext) => string)} a.instructions the system prompt. A
  *        function gets this call's context (caller's number, today's date).
  * @param {string} [a.welcomeMessage] the first thing the agent says, word for word
+ * @param {string} [a.voice] the Cartesia voice id the page speaks this agent in, unless the
+ *        visitor picks another
  * @param {Array<{name: string, content: string, actions?: string}>} [a.knowledge] topics on
  *        the session from the first turn, like always-retrieved topics
  * @param {Array} [a.tools] tools available everywhere in the call
  * @param {Record<string, {prompt: string, tools?: Array}>} [a.steps] flow steps
- * @param {Array} [a.handoffs] other agents (the OpenAI-compatibility example only)
  * @param {string} [a.callerNumber] the test caller's number, as caller ID would give it
  *
  * @typedef {{ callerNumber: string | null, today: string, weekday: string }} CallContext
  */
-export function agent({ name, description = "", instructions, welcomeMessage, knowledge, tools = [], steps = {}, handoffs = [], callerNumber }) {
-  return { name, description, instructions, welcomeMessage, knowledge, tools, steps, handoffs, callerNumber };
+export function agent({ name, description = "", instructions, welcomeMessage, voice, knowledge, tools = [], steps = {}, callerNumber }) {
+  return { name, description, instructions, welcomeMessage, voice, knowledge, tools, steps, callerNumber };
 }
 
 /**
@@ -84,39 +93,18 @@ Always collect all required pieces of information from the user before proceedin
 
 Remember to be conversational and brief.`;
 
-const transferName = (target) => `transfer_to_${target.name}`;
-
-function transferTool(target) {
-  return {
-    type: "function",
-    name: transferName(target),
-    description: `Hand the caller to ${target.name}. ${target.description}`.trim(),
-    parameters: {
-      type: "object",
-      properties: {
-        reason: { type: "string", description: "Why the caller needs this agent, in a few words." },
-      },
-      required: ["reason"],
-    },
-  };
-}
-
-/** What a tool's `execute` returned, as a session wants it: { output, knowledge? }. */
-export function asToolResult(result) {
-  return result instanceof ToolResult ? { output: result.output, knowledge: result.knowledge } : { output: result ?? "" };
-}
-
 const schema = ({ name, description, parameters }) => ({ type: "function", name, description, parameters });
 
 export function callContext(a, date = new Date()) {
   return {
     callerNumber: a.callerNumber ?? null,
-    today: date.toISOString().slice(0, 10),
+    // The caller's local date, so it agrees with the weekday below (UTC can be a day ahead).
+    today: date.toLocaleDateString("en-CA"),
     weekday: date.toLocaleDateString("en-US", { weekday: "long" }),
   };
 }
 
-/** The tools live in this agent and step: the agent's own, the step's, and any handoffs. */
+/** The tools live in this step: the agent's own and the step's. */
 function activeTools(a, stepName) {
   return [...a.tools, ...(a.steps[stepName]?.tools ?? [])];
 }
@@ -125,34 +113,28 @@ function activeTools(a, stepName) {
 export function sessionFor(a, { stepName = null, call = callContext(a) } = {}) {
   return {
     instructions: typeof a.instructions === "function" ? a.instructions(call) : a.instructions,
-    tools: [...activeTools(a, stepName).map(schema), ...a.handoffs.map(transferTool)],
-    // Knowledge on the session from the first turn. Unset on a handoff so it doesn't linger.
+    tools: activeTools(a, stepName).map(schema),
     poly_knowledge: a.knowledge ?? [],
   };
 }
 
 /**
- * Runs a scenario on a session: answers tool calls, moves between flow steps, says fixed
- * lines, ends the call, and keeps a plain transcript for tools that need the conversation so
- * far (the text agent bridge).
+ * Runs an agent on a session: answers tool calls, moves between flow steps, says fixed
+ * lines, and ends the call.
  *
- * Events: step {from, to}, handoff {from, to, reason}, say {utterance, hangup}, breadcrumb {title, data}
+ * Events: step {from, to}, say {utterance, hangup}, hangup {responseId}, session {fields},
+ * breadcrumb {title, data}
  */
 export class AgentRunner {
-  constructor({ agents, start, session, extras = {} }) {
-    this.agents = agents;
-    this.current = agents.find((a) => a.name === start) ?? agents[0];
-    this.call = callContext(this.current);
+  constructor({ agent, session }) {
+    this.agent = agent;
+    this.call = callContext(agent);
     this.step = null;
     this.stepItemId = null;
     this.state = {}; // per-call state the tools share, e.g. the verified customer
     this.session = session;
-    this.extras = extras; // handed to every tool in ctx, e.g. the text agent's connect function
-    this.history = [];
     this.handlers = new Map();
     session.onToolCall = (call) => this.onToolCall(call);
-    session.on("agent.done", ({ text }) => text && this.history.push({ role: "assistant", agent: this.current.name, text }));
-    session.on("conversation.item.input_audio_transcription.completed", (e) => e.transcript && this.history.push({ role: "user", text: e.transcript }));
     // The step prompt's item id, so the next step can remove it: only the current step's
     // prompt stays in the history.
     session.on("conversation.item.added", ({ item }) => {
@@ -178,43 +160,44 @@ export class AgentRunner {
    * `response.create` to open the call.
    */
   sessionConfig() {
-    const session = sessionFor(this.current, { call: this.call });
-    if (this.current.welcomeMessage) session.poly_first_assistant_message = this.current.welcomeMessage;
+    const session = sessionFor(this.agent, { call: this.call });
+    if (this.agent.welcomeMessage) session.poly_first_assistant_message = this.agent.welcomeMessage;
     return session;
   }
 
   /** A typed caller turn. */
   say(text) {
-    this.history.push({ role: "user", text });
     this.session.sendText(text);
   }
 
   async onToolCall(call) {
-    const target = this.current.handoffs.find((a) => transferName(a) === call.name);
-    if (target) return this.handoff(target, call.args?.reason);
-
-    const t = activeTools(this.current, this.step).find((x) => x.name === call.name);
+    const t = activeTools(this.agent, this.step).find((x) => x.name === call.name);
     if (!t) return { output: { error: `unknown tool '${call.name}'` } };
     if (call.args === null) return { output: { error: "arguments were not valid JSON" } };
     const ctx = {
-      agent: this.current,
+      agent: this.agent,
       step: this.step,
       call: this.call,
       state: this.state,
-      history: [...this.history],
       breadcrumb: (title, data) => this.emit("breadcrumb", { title, data }),
-      ...this.extras,
     };
     const result = await t.execute(call.args ?? {}, ctx);
     if (!(result instanceof ToolResult)) return { output: result ?? "" };
 
     const out = { output: result.output, knowledge: result.knowledge };
+    if (result.session) {
+      // Before the output goes back, so the follow-up response already has the change.
+      this.session.update(result.session);
+      this.emit("session", { fields: result.session });
+    }
     if (result.step !== undefined) Object.assign(out, this.enterStep(result.step));
     if (result.say) {
       out.say = result.say;
       out.hangup = result.hangup ?? false;
-      this.history.push({ role: "assistant", agent: this.current.name, text: result.say });
       this.emit("say", { utterance: result.say, hangup: out.hangup });
+    } else if (result.hangup) {
+      out.hangup = true;
+      this.emit("hangup", { responseId: call.responseId });
     }
     return out;
   }
@@ -224,38 +207,15 @@ export class AgentRunner {
    * the last step's prompt removed (`remove`), and this step's added (`system`).
    */
   enterStep(name) {
-    if (name !== null && !this.current.steps[name]) throw new Error(`no step '${name}' on ${this.current.name}`);
+    if (name !== null && !this.agent.steps[name]) throw new Error(`no step '${name}' on ${this.agent.name}`);
     const from = this.step;
     const remove = this.stepItemId ?? undefined;
     this.step = name;
     this.stepItemId = null;
-    this.session.update({ tools: sessionFor(this.current, { stepName: name, call: this.call }).tools });
-    this.emit("step", { from, to: name, prompt: name && this.current.steps[name].prompt });
-    this.pendingStepText = name === null ? null : stepMessage(this.current.steps[name].prompt);
+    this.session.update({ tools: sessionFor(this.agent, { stepName: name, call: this.call }).tools });
+    this.emit("step", { from, to: name, prompt: name && this.agent.steps[name].prompt });
+    this.pendingStepText = name === null ? null : stepMessage(this.agent.steps[name].prompt);
     return { remove, system: this.pendingStepText ?? undefined };
-  }
-
-  handoff(target, reason) {
-    const from = this.current;
-    this.current = target;
-    this.step = null;
-    // Swap the agent before the call's output goes back, so the follow-up response, which
-    // the session sends next, is the new agent's first turn.
-    this.session.update(sessionFor(target, { call: this.call }));
-    this.emit("handoff", { from: from.name, to: target.name, reason });
-    // Say who has the call now and why, so the new agent's first turn picks up the request.
-    return { output: { transferred_to: target.name, reason, note: `You are ${target.name} now. Carry on with the caller's request.` } };
-  }
-
-  /** Switch agent by hand (the agent picker, in the handoff example). */
-  switchTo(name) {
-    const target = this.agents.find((a) => a.name === name);
-    if (!target || target === this.current) return;
-    const from = this.current;
-    this.current = target;
-    this.step = null;
-    this.session.update(sessionFor(target, { call: this.call }));
-    this.emit("handoff", { from: from.name, to: target.name, reason: "switched in the agent picker" });
   }
 }
 

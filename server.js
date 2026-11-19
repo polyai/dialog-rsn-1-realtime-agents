@@ -4,8 +4,8 @@
  *   Browser  ->  ws://localhost:3000/realtime  ->  wss://api.studio.poly.ai/v1/realtime  (POLY_API_KEY)
  *   Browser  ->  ws://localhost:3000/tts       ->  wss://api.cartesia.ai/tts/websocket (CARTESIA_API_KEY, optional)
  *
- * Everything else runs in the browser: the agents, their tools, the handoffs and the
- * supervisor. The relay exists only because a browser WebSocket can't set the
+ * Everything else runs in the browser: the agents, their tools and the flow steps.
+ * The relay exists only because a browser WebSocket can't set the
  * X-API-KEY header, and a key in page code is a key anyone can read.
  */
 import { createServer } from "node:http";
@@ -67,8 +67,10 @@ const wss = new WebSocketServer({ noServer: true, maxPayload: 1 << 20 });
 server.on("upgrade", (req, socket, head) => {
   const { pathname } = new URL(req.url, "http://x");
   const upstream = upstreams[pathname];
-  // Only this page may use the keys: refuse sockets opened from any other origin.
-  const sameOrigin = req.headers.origin === `http://${req.headers.host}`;
+  // Only this page may use the keys: refuse sockets opened from any other origin. Behind an
+  // HTTPS proxy, the page's host is the one the proxy forwards.
+  const hosts = [req.headers.host, req.headers["x-forwarded-host"]].filter(Boolean);
+  const sameOrigin = hosts.some((h) => req.headers.origin === `http://${h}` || req.headers.origin === `https://${h}`);
   if (!upstream || !sameOrigin) {
     socket.end("HTTP/1.1 403 Forbidden\r\n\r\n");
     return;
@@ -89,7 +91,8 @@ function pipe(client, { url, headers }, name) {
 
   remote.on("open", () => backlog.splice(0).forEach((data) => remote.send(data)));
   remote.on("message", (data) => client.readyState === WebSocket.OPEN && client.send(data.toString()));
-  remote.on("close", (code, reason) => client.close(code === 1005 ? 1000 : code, reason));
+  // 1005 and 1006 are reported, never sent: passing them on throws and takes the relay down.
+  remote.on("close", (code, reason) => client.close(code === 1005 ? 1000 : code === 1006 ? 1011 : code, reason));
   remote.on("error", (err) => {
     console.error(`[${name}] upstream error: ${err.message}`);
     client.close(1011, err.message.slice(0, 120));

@@ -33,14 +33,14 @@ const CONNECT_TIMEOUT_MS = 12_000;
 export class RealtimeSession {
   /**
    * @param {object} opts
-   * @param {string} [opts.label] name shown in the event log, e.g. "voice" or "text agent"
+   * @param {string} [opts.label] name shown in the event log, e.g. "voice"
    * @param {() => WebSocket} opts.connect opens the socket (through the relay in a browser)
    * @param {(call: object) => Promise<object>} [opts.onToolCall] answers a function call:
-   *        resolves to { output, knowledge?, remove?, system?, say? }. Throwing sends
+   *        resolves to { output, knowledge?, remove?, system?, say?, hangup? }. Throwing sends
    *        {"error": ...} as the output. After the output: `remove` deletes an item (an old
    *        step's prompt), `system` adds a system message (a new step's prompt), and `say`
    *        adds a fixed assistant line, which the page speaks itself, and asks for no
-   *        follow-up response.
+   *        follow-up response. `hangup` asks for no follow-up response either.
    */
   constructor({ label = "voice", connect, onToolCall }) {
     this.label = label;
@@ -124,8 +124,9 @@ export class RealtimeSession {
   }
 
   /**
-   * Change the session mid-call: a handoff swaps `instructions` and `tools`. Arrays replace,
-   * objects merge. Safe at any time, including inside the tool gate.
+   * Change the session mid-call: a flow step swaps `tools`, a language switch sets
+   * `poly_response_language`. Arrays replace, objects merge. Safe at any time, including
+   * inside the tool gate.
    */
   update(session) {
     if (session.audio?.input?.turn_detection) this.createResponse = session.audio.input.turn_detection.create_response;
@@ -135,12 +136,6 @@ export class RealtimeSession {
   /** A typed turn. Queued until the conversation can take it (rules 1 and 4). */
   sendText(text) {
     this.queue.push({ kind: "text", text });
-    this.pump();
-  }
-
-  /** Ask for a response without adding a turn, e.g. so a new agent speaks first. */
-  requestResponse() {
-    this.queue.push({ kind: "respond" });
     this.pump();
   }
 
@@ -227,7 +222,7 @@ export class RealtimeSession {
           // and its output.
           f.toolGate++;
           const list = this.calls.get(event.response_id) ?? [];
-          list.push({ itemId: event.item.id, call_id: event.item.call_id, name: event.item.name, arguments: "" });
+          list.push({ itemId: event.item.id, call_id: event.item.call_id, name: event.item.name, arguments: "", responseId: event.response_id });
           this.calls.set(event.response_id, list);
         }
         break;
@@ -307,9 +302,9 @@ export class RealtimeSession {
       // you add), so the page says it.
       if (say) this.addMessage("assistant", say);
     }
-    if (outputs.some((o) => o.say)) {
-      // The tool already gave the agent's turn, so there's no follow-up response: the call
-      // waits for the caller, or ends.
+    if (outputs.some((o) => o.say || o.hangup)) {
+      // The tool already gave the agent's turn, or asked for silence, so there's no
+      // follow-up response: the call waits for the caller, or ends.
       f.toolGate -= calls.length;
       this.pump();
       return;

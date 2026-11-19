@@ -17,10 +17,9 @@ Open http://localhost:3000, press **Connect** and start talking. Use headphones,
 
 | Scenario | What it shows |
 | --- | --- |
-| **Knowledge agent** | An energy supplier's help line. It answers from its help center, takes a meter reading when a topic's action says to, and transfers to a person or ends the call. The page shows which articles each answer cited. Start here. |
+| **Restaurant: bookings, knowledge and French** | Margaux at Maison Lumiere, the restaurant from the playground on poly.ai. She answers from always-on topics and a searchable guide, citing what she used, checks availability and reads a booking back before making it, and switches to French on request. Start here. |
+| **Knowledge agent** | An energy supplier's help line. It answers from its help center, takes a meter reading when a topic's action says to, and transfers to a person or ends the call. The page shows which articles each answer cited. |
 | **Bike shop: one agent with a flow** | A bike shop's phone line. It verifies the caller with one function, handles a return in a flow step with a policy check in code, sells from the sale by following a topic, and ends with a transfer or a goodbye. |
-| **Bring your text agent** | A voice agent that gets answers about plans and accounts from a chat agent you already run, and handles the conversation itself. |
-| **Handoffs, from openai-realtime-agents** | Two agents that hand the caller to each other, as [openai/openai-realtime-agents](https://github.com/openai/openai-realtime-agents) builds them. Here for developers moving from that repo. |
 
 Everything is plain JavaScript with no build step. Node runs a small relay that holds your key; the agents and tools run in the page, so you can read and change them in one place.
 
@@ -74,12 +73,13 @@ Dialog-RSN-1 hears the caller, decides when they've finished, and answers in tex
 
 ### One agent, from the welcome message to the goodbye
 
-An agent is one system prompt, a welcome message, knowledge, and tools. The prompt stays the same for the whole call. Here's the shape, from `public/scenarios/bikeShop/index.js`:
+An agent is one system prompt, a welcome message, a voice, knowledge, and tools. The prompt stays the same for the whole call. Here's the shape, from `public/scenarios/bikeShop/index.js`:
 
 ```js
 export const larkspurAgent = agent({
   name: "larkspur",
   callerNumber: "+1 555 201 4477",
+  voice: "ef191366-f52f-447a-a398-ed8c0f2943a1", // Cartesia "Archie"
   welcomeMessage: "Thanks for calling Larkspur Cycles. This call is recorded for training. How can I help?",
   instructions: (call) => `
 You're the voice assistant on Larkspur Cycles' phone line...
@@ -102,6 +102,8 @@ Today is ${call.weekday}, ${call.today}. Caller ID shows ${call.callerNumber}.`,
 ```json
 {"type": "session.update", "session": {"poly_first_assistant_message": "Thanks for calling Larkspur Cycles. This call is recorded for training. How can I help?", "...": "..."}}
 ```
+
+**The voice** is a Cartesia voice id. The page speaks the agent in it unless the visitor picks another voice in the toolbar. Without a Cartesia key, the page uses the browser's voice.
 
 **The prompt** says what the agent is for and which rules are hard. It doesn't script the order of turns. Dialog-RSN-1 judges at every turn whether the caller has finished, holds a phone number read out in chunks across turns, takes corrections like "no, the third digit was a four", and asks again when something doesn't add up. A step-by-step script does worse whenever the caller goes off it, which is often.
 
@@ -153,9 +155,9 @@ The decision itself is a plain function. `check_return` applies the returns poli
 
 ### Ending the call
 
-Every agent here ends a call with one of two tools from `public/lib/callTools.js`. `transfer_call(reason, utterance)` hands the caller to a person on the team, with a reason from a fixed list (`SPEAK_TO`, `COMPLAINT`, `OUT_OF_SCOPE`...). `end_call()` says goodbye and hangs up. Both are terminal: the page says a fixed line and ends the call, and the model writes nothing after them. In production, `transfer_call` is where your telephony moves the call.
+Every agent here ends a call with one of two tools from `public/lib/callTools.js`. `transfer_call(reason, utterance)` hands the caller to a person on the team, with a reason from a fixed list (`SPEAK_TO`, `COMPLAINT`, `OUT_OF_SCOPE`...). `end_call(utterance)` says goodbye and hangs up. In both, `utterance` is a `poly_spoken` argument (below): the model says its last line as it calls the tool, and the page plays it, then hangs up (`hangUp()`). Nothing is said after it, so the caller hears one goodbye, in the model's own words. In production, `transfer_call` is where your telephony moves the call.
 
-A tool can return a fixed line like that at any point. `sayExactly(utterance, output)` and `endCall(utterance, output)` make the page say the line word for word. The line goes into the history as the agent's turn (an assistant message you add is history only; the server never speaks it), and the page asks for no reply to the tool.
+A tool can also return a fixed line, said word for word. `sayExactly(utterance, output)` says it and waits for the caller; `endCall(utterance, output)` says it and hangs up. The line goes into the history as the agent's turn (an assistant message you add is history only; the server never speaks it), and the page asks for no reply to the tool.
 
 ### Saying something while a tool runs
 
@@ -165,7 +167,11 @@ Mark one string argument of a tool with `"poly_spoken": true`, and the model wri
 utterance: spoken("A short line while it's set up, e.g. 'Great, I'll set that up now.'"),
 ```
 
-Use it on tools that are slow or change something: `create_return`, `send_checkout_link`, `submitMeterReading`, `ask_text_agent`. Leave it off fast lookups and step changes. On a fast tool it makes the first audio earlier but the answer later.
+Use it on tools that are slow or change something: `create_booking`, `create_return`, `send_checkout_link`, `submitMeterReading`, and the two that end the call. Leave it off fast lookups and step changes. On a fast tool it makes the first audio earlier but the answer later.
+
+### Answering in another language
+
+`poly_response_language` sets the language the model answers in: an ISO tag like `fr-FR`, or plain words. The restaurant's `switch_language` tool returns `setSession({ poly_response_language: "fr-FR" })`, which updates the session before the tool's output goes back, so the very next reply is in French. The page switches the voice's language to match.
 
 ### The knowledge agent
 
@@ -181,49 +187,26 @@ execute: ({ query }) => {
 },
 ```
 
-Found articles can carry `actions` too: the meter reading article tells the agent to call `submitMeterReading` if the caller wants to give one now. Swap `searchArticles` for your own search (vector, keyword, an API) and keep the rest. If your search is slow, give it a `poly_spoken` argument.
+Found articles can carry `actions` too: the meter reading article tells the agent to call `submitMeterReading` if the caller wants to give one now. Swap the keyword search in `public/lib/search.js` for your own (vector, BM25, an API) and keep the rest. If your search is slow, give it a `poly_spoken` argument.
+
+The restaurant splits its knowledge the same way. The basics every call might need (hours, seating, policies, dietary needs) are topics on the session, and their `actions` say what to do: put an allergy in the booking's notes, or offer the Maitre d' for a party of more than 12. The longer sections (both tasting menus, the wine list, the staff) sit behind `search_guide`, so the session carries only the ones the call asks about.
 
 `response.done` also carries `poly_out_of_domain`: whether Dialog-RSN-1 judged the request outside what the agent is there for. The page flags those turns in amber.
 
-### Bring your text agent
+### Coming from openai-realtime-agents
 
-If you already run a chat agent, with its own prompt and tools, the voice agent can ask it for answers. The voice agent handles the conversation: greetings, asking the caller to repeat, goodbyes. For plans, offers, bills and accounts it calls `ask_text_agent`, and says the answer.
+There, a scenario is several agents that hand the caller to each other, each with its own instructions. On Dialog-RSN-1, build one agent. Each handoff swaps the system prompt, and the model reads the prompt, then the tools, then the history, so the server can't reuse what it had already processed and reads the whole conversation again. A transfer also means something else in PolyAI's agents: it hands the caller to a person, and the call ends.
 
-```mermaid
-sequenceDiagram
-    participant Caller
-    participant Voice as Voice agent (Dialog-RSN-1)
-    participant Text as Your text agent
-    participant Tool
-    Caller->>Voice: "Why was my last bill so high?"
-    Voice-->>Caller: "Let me look into that." (said while the text agent works)
-    Voice->>Text: the conversation so far, and the request
-    Text->>Tool: getUserAccountInfo
-    Tool->>Text: account and latest bill
-    Text->>Voice: the answer
-    Voice->>Caller: says it
-```
-
-Here the text agent is Dialog-RSN-1 on a second session, in text, so the example runs with one key. In your app, `ask_text_agent` would call what you run today. Put its prompt in `textAgentInstructions` and its tools in `textAgentTools` (`scenarios/textAgent/yourTextAgent.js`) to try your own.
-
-It's a way to reuse what you have, with costs. Each ask opens a session and runs at least two generations, so it's slow, and the text agent reads a transcript of the call, not the audio. A new agent is better built as one Dialog-RSN-1 agent with its own tools, like the bike shop.
-
-### Handoffs, for developers moving from openai-realtime-agents
-
-`public/scenarios/simpleHandoff.js` is the handoff pattern from openai-realtime-agents. Each agent has its own instructions and tools, and gets a `transfer_to_<name>` tool for each agent it can hand the caller to. When the model calls one, one `session.update` swaps in the new agent's instructions and tools.
-
-It works, but it isn't how to build on Dialog-RSN-1. Each handoff costs time: the model reads the system prompt, then the tools, then the history, so when the prompt changes the server can't reuse what it had already processed, and reads the whole conversation again. And a transfer means something else in PolyAI's agents: it hands the caller to a person, and the call ends. A `transfer_to_returns` that swaps personas isn't that.
-
-To port an openai-realtime-agents scenario, make one agent. Put what the agents share in its prompt, turn each specialist agent into a flow step or a topic with actions, and replace a transfer to a "human" agent with `transfer_call`.
+To port a scenario, put what the agents share in one prompt, turn each specialist agent into a flow step or a topic with actions, and replace a transfer to a "human" agent with `transfer_call`.
 
 ## Using the page
 
-- **Scenario** at the top picks what to run. **Agent** picks which agent starts, in the handoff example; switching it mid-call does a handoff by hand. Both are in the URL, so you can link to one: `/?scenario=bikeShop`.
+- **Scenario** at the top picks what to run. It's in the URL, so you can link to one: `/?scenario=bikeShop`.
 - **Transcript**, on the left: what was said, tool calls with their arguments and output (click to expand), flow steps, fixed lines, cited knowledge and out-of-domain flags. When the caller cuts in, the part of the reply they didn't hear is struck through.
-- **Events**, on the right: every event to and from each session, the text agent's included. Click one for its payload, or filter by type.
-- **Toolbar**: connect, push to talk, the voice, the input audio format, and the event log.
+- **Events**, on the right: every event to and from the session. Click one for its payload, or filter by type.
+- **Toolbar**: connect, push to talk, the voice ("Agent's voice" is the agent's own), the input audio format, and the event log.
 
-To try the bike shop, say you'd like to return the helmet you bought, and that the number you're calling from is the one on your account. The test customer is Jordan, born 14 March 1988.
+To try the restaurant, book a table for Friday evening, ask what's on the Omakase menu, or ask for a private room for twenty. To try the bike shop, say you'd like to return the helmet you bought, and that the number you're calling from is the one on your account. The test customer is Jordan, born 14 March 1988.
 
 **Input audio** sets what the microphone sends. PCM at 16 kHz is Dialog-RSN-1's native rate. PCM at 8 kHz and G.711 (μ-law and A-law) are what a phone line carries, so you can hear how an agent copes with call-quality audio:
 
@@ -272,7 +255,6 @@ What holds for every scenario here:
 | The agent interrupts itself | It hears its own voice through your speakers | Use headphones |
 | No sound | The voice is off, or the tab is muted | Check **Voice** in the toolbar and the tab's sound |
 | Cartesia isn't in the voice list | `CARTESIA_API_KEY` isn't set | Add it to `.env` and restart |
-| `ask_text_agent` says "running" for a long time | The text agent's session couldn't connect | It retries once after 12 seconds; check your network |
 
 ## Layout
 
@@ -285,11 +267,11 @@ public/
     session.js                     the protocol client
     agents.js                      agent(), tool(), flow steps, fixed lines, the runner
     callTools.js                   transfer_call and end_call
-    textAgent.js                   a one-off text session (the text agent example)
+    search.js                      the keyword search behind the search tools
     speech.js                      browser voice and Cartesia, playback reports
     audio/                         microphone, resampling, G.711, player
     ui/                            transcript and event log
-  scenarios/                       one folder or file per scenario
+  scenarios/                       one folder per scenario
 ```
 
-Inspired by [openai/openai-realtime-agents](https://github.com/openai/openai-realtime-agents); the handoff example is a port of its simpleHandoff. Every company, person and number in the scenarios is made up.
+Inspired by [openai/openai-realtime-agents](https://github.com/openai/openai-realtime-agents). Every company, person and number in the scenarios is made up.
