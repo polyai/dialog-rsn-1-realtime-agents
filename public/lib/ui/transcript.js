@@ -1,5 +1,5 @@
 /**
- * The transcript pane: caller and agent messages, tool calls and results, handoffs, and what
+ * The transcript pane: caller and agent messages, tool calls and results, steps, and what
  * Dialog-RSN-1 reports on each reply (the knowledge it cited, and whether the request was
  * outside what the agent handles).
  */
@@ -17,9 +17,15 @@ export class Transcript {
     this.users = new Map(); // item id -> element
     this.agents = new Map(); // response id -> {row, body}
     this.tools = new Map(); // call id -> element
+    // Follow the conversation, including replies that grow as they stream, unless the reader
+    // has scrolled up to look at something.
+    this.pinned = true;
+    root.addEventListener("scroll", () => (this.pinned = root.scrollHeight - root.scrollTop - root.clientHeight < 40));
+    new MutationObserver(() => this.pinned && (root.scrollTop = root.scrollHeight)).observe(root, { childList: true, subtree: true, characterData: true });
   }
 
   clear() {
+    this.pinned = true;
     this.root.replaceChildren();
     this.users.clear();
     this.agents.clear();
@@ -27,9 +33,7 @@ export class Transcript {
   }
 
   add(node) {
-    const stick = this.root.scrollHeight - this.root.scrollTop - this.root.clientHeight < 80;
     this.root.append(node);
-    if (stick) this.root.scrollTop = this.root.scrollHeight;
     return node;
   }
 

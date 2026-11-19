@@ -166,7 +166,7 @@ main.no-logs .events-pane { display: none; }
 .tool pre, .crumb pre { margin: 4px 10px 8px; font: 11px/1.4 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 div.crumb { padding: 6px 10px; color: var(--muted); }
 .crumb { color: var(--muted); border-style: dashed; }
-.crumb.handoff { color: var(--accent); border-color: var(--accent); border-style: solid; background: transparent; }
+.crumb.marker { color: var(--accent); border-color: var(--accent); border-style: solid; background: transparent; }
 .crumb.warn { background: var(--warn); color: var(--warn-ink); border-color: transparent; }
 .crumb.cite { background: var(--cite); color: var(--cite-ink); border-color: transparent; }
 .crumb.error { background: var(--error); color: var(--error-ink); border-color: transparent; }

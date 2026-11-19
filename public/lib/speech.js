@@ -43,6 +43,17 @@ export class BrowserVoice {
     return speechSynthesis.getVoices().filter((v) => v.lang?.startsWith("en"));
   }
 
+  /** Whether this reply is still to play or playing. */
+  has(id) {
+    return this.replies.has(id);
+  }
+
+  /** The language replies are spoken in from the next sentence on, e.g. "fr". */
+  setLanguage(code) {
+    this.lang = code;
+    this.langVoice = code.startsWith("en") ? null : speechSynthesis.getVoices().find((v) => v.lang?.startsWith(code));
+  }
+
   async start() {
     speechSynthesis.cancel();
   }
@@ -137,7 +148,9 @@ export class BrowserVoice {
       return;
     }
     const u = new SpeechSynthesisUtterance(text);
-    if (this.voice) u.voice = this.voice;
+    const voice = this.langVoice ?? this.voice;
+    if (voice) u.voice = voice;
+    if (this.lang) u.lang = this.lang;
     r.speaking = { text, charIndex: 0 };
     const before = r.spoken;
     u.onstart = () => {
@@ -173,6 +186,7 @@ export class BrowserVoice {
 const SAMPLE_RATE = 24000;
 
 export const CARTESIA_VOICES = [
+  { id: "25d7abcb-4d6d-4aca-adce-8a1c85620c8b", label: "Jessica (US English, female)" },
   { id: "f786b574-daa5-4673-aa0c-cbe3e8534c02", label: "Katie (US English, female)" },
   { id: "47c38ca4-5f35-497b-b1a3-415245fb35e1", label: "Daniel (US English, male)" },
   { id: "62ae83ad-4f6a-430b-af41-a9bede9286ca", label: "Gemma (British English, female)" },
@@ -197,6 +211,16 @@ export class CartesiaVoice {
     this.replies = new Map(); // id -> {held, opened, finished, cancelled, words, chunks, synthDone, started}
     this.order = []; // replies in the order they're played
     this.dead = new Set(); // replies stopped or dropped: late text for them is ignored
+  }
+
+  /** The language replies are spoken in from the next one on, e.g. "fr". */
+  setLanguage(code) {
+    this.base = { ...this.base, language: code };
+  }
+
+  /** Whether this reply is still to play or playing. */
+  has(id) {
+    return this.replies.has(id);
   }
 
   async start() {

@@ -53,6 +53,7 @@ export const larkspurAgent = agent({
   name: "larkspur",
   description: "A bike shop's phone line: verifies the caller, handles a return in a flow step, sells from the sale, and transfers or ends the call.",
   callerNumber: "+1 555 201 4477",
+  voice: "ef191366-f52f-447a-a398-ed8c0f2943a1", // Cartesia "Archie", masculine
   welcomeMessage: `Thanks for calling ${companyName}. This call is recorded for training. How can I help?`,
   instructions: (call) => `
 You're the voice assistant on ${companyName}'s phone line. ${companyName} is a bike shop that sells online and from two stores. You're relaxed, warm and patient, and you know bikes.
@@ -187,4 +188,4 @@ When the return is done or they've changed their mind, call finish_return.
   },
 });
 
-export default [larkspurAgent];
+export default larkspurAgent;

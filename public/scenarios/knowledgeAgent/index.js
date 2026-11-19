@@ -1,31 +1,16 @@
 import { agent, tool, spoken, withKnowledge } from "../../lib/agents.js";
 import { transferCallTool, endCallTool } from "../../lib/callTools.js";
+import { keywordSearch, asTopic } from "../../lib/search.js";
 import { companyName, brief, articles } from "./articles.js";
 
-const STOP = new Set(["the", "and", "for", "you", "your", "how", "what", "can", "does", "with", "my", "is", "do", "i", "a", "to", "of", "on", "in", "it"]);
-const words = (s) => String(s).toLowerCase().split(/\W+/).filter((w) => w.length > 2 && !STOP.has(w));
-
-/** A keyword search over the help center. Swap in your own search: vector, BM25, an API. */
-export function searchArticles(query, limit = 3) {
-  const q = words(query);
-  return articles
-    .map((a) => {
-      const text = words(`${a.title} ${a.title} ${a.content}`);
-      return { a, score: q.reduce((n, w) => n + text.filter((t) => t.startsWith(w) || w.startsWith(t)).length, 0) };
-    })
-    .filter((x) => x.score > 0)
-    .sort((x, y) => y.score - x.score)
-    .slice(0, limit)
-    .map((x) => x.a);
-}
-
-// What poly_knowledge takes: name and content, and actions where a topic has them.
-const asTopic = ({ name, content, actions }) => (actions ? { name, content, actions } : { name, content });
+/** A keyword search over the help center. */
+export const searchArticles = (query) => keywordSearch(articles, query, { text: (a) => `${a.title} ${a.title} ${a.content}` });
 
 export const helpCenterAgent = agent({
   name: "helpCenter",
   description: "An energy supplier's help line that answers from its help center and takes meter readings.",
   callerNumber: "+1 503 555 0164",
+  voice: "f786b574-daa5-4673-aa0c-cbe3e8534c02", // Cartesia "Katie", feminine
   welcomeMessage: `Hi, you're through to ${companyName}. What can I help with today?`,
   instructions: (call) => `
 You answer the phone for ${companyName}'s customer help line. You're warm, clear and efficient.
@@ -98,4 +83,4 @@ Today is ${call.weekday}, ${call.today}. The caller is ringing from ${call.calle
   ],
 });
 
-export default [helpCenterAgent];
+export default helpCenterAgent;

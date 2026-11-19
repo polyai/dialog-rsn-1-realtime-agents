@@ -9,7 +9,7 @@
 import WebSocket from "ws";
 import { RealtimeSession } from "../public/lib/session.js";
 import { AgentRunner } from "../public/lib/agents.js";
-import { allAgentSets } from "../public/scenarios/index.js";
+import { scenarios } from "../public/scenarios/index.js";
 
 const URL = process.env.DIALOG_REALTIME_URL || "wss://api.studio.poly.ai/v1/realtime";
 const KEY = process.env.POLY_API_KEY;
@@ -23,6 +23,15 @@ const connect = () => new WebSocket(URL, { headers: { "X-API-KEY": KEY, "User-Ag
 
 // A scripted caller per scenario. A journey stops early if the agent ends the call.
 const JOURNEYS = {
+  restaurant: [
+    "Hi, I'd like to book a table for Friday at half seven, for four people.",
+    "Let me just check with my wife, hold on a sec.",
+    "Sorry, I'm back. Yes, that works.",
+    "It's for Sam Okafor. Oh, and it's her birthday, and one of us is gluten free.",
+    "Yes, that's right.",
+    "What's on the Omakase menu?",
+    "Great, that's all. Bye!",
+  ],
   knowledgeAgent: [
     "Hi, how do I send you a meter reading?",
     "Can I give you one now? It's the electricity meter, and it says 4 8 2 1 7.",
@@ -38,8 +47,6 @@ const JOURNEYS = {
     "A refund, please. Go ahead.",
     "No, that's all. Thanks, bye.",
   ],
-  textAgent: ["Hi, I'm wondering why my last bill was so high.", "Yes, it's the number I'm calling from.", "Is there something cheaper for calling Portugal?", "Great, that's all. Bye."],
-  simpleHandoff: ["Yes please, one about the sea."],
 };
 
 const gray = (s) => `\x1b[90m${s}\x1b[0m`;
@@ -69,38 +76,30 @@ function settled(session, ms = 600, timeout = 45_000) {
 
 async function run(key) {
   console.log(bold(`\n== ${key}`));
-  const agents = allAgentSets[key];
   const session = new RealtimeSession({ label: "voice", connect });
-  const stats = { failed: 0, handoffs: [], steps: [], tools: [], cited: [], outOfDomain: 0, ended: false, errors: [] };
-  const runner = new AgentRunner({
-    agents,
-    session,
-    extras: {
-      connect,
-      onSession: (s) => s.on("error", (e) => stats.errors.push(`[${s.label}] ${e.error?.message}`)),
-    },
-  });
-  runner.on("handoff", ({ from, to }) => {
-    stats.handoffs.push(`${from}->${to}`);
-    console.log(gray(`   handoff ${from} -> ${to}`));
-  });
+  const stats = { failed: 0, steps: [], tools: [], cited: [], outOfDomain: 0, ended: false, errors: [] };
+  const runner = new AgentRunner({ agent: scenarios[key], session });
   runner.on("step", ({ from, to }) => {
     stats.steps.push(to ?? `-${from}`);
     console.log(gray(to ? `   step ${to}` : `   left step ${from}`));
   });
   runner.on("say", ({ utterance, hangup }) => {
-    console.log(`   ${runner.current.name}: ${utterance} ${gray("(fixed line)")}`);
+    console.log(`   ${runner.agent.name}: ${utterance} ${gray("(fixed line)")}`);
     if (hangup) {
       stats.ended = true;
       console.log(gray("   call ended"));
     }
+  });
+  runner.on("hangup", () => {
+    stats.ended = true;
+    console.log(gray("   call ended"));
   });
   runner.on("breadcrumb", ({ title }) => console.log(gray(`   ${title}`)));
   session.on("tool.call", ({ call }) => {
     stats.tools.push(call.name);
     console.log(gray(`   tool ${call.name} ${JSON.stringify(call.args)}`));
   });
-  session.on("agent.done", ({ text }) => text && console.log(`   ${runner.current.name}: ${text}`));
+  session.on("agent.done", ({ text }) => text && console.log(`   ${runner.agent.name}: ${text}`));
   session.on("response.done", ({ response }) => {
     if (response.status === "failed") stats.failed++;
     if (response.poly_cited_topics) {
