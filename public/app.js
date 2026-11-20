@@ -291,9 +291,12 @@ function bind(session, runner) {
   });
   session.on("conversation.item.input_audio_transcription.completed", (e) => transcript.user(e.item_id, e.transcript));
 
-  session.on("agent.delta", ({ responseId, delta, text }) => {
+  session.on("agent.delta", ({ responseId, delta, text, emotion }) => {
     transcript.agentText(responseId, runner.agent.name, text);
-    call?.voice?.push(responseId, delta);
+    const voice = call?.voice;
+    // Cartesia reads a reply's opening tag as delivery, so it gets the tag back.
+    const tagged = emotion && voice instanceof CartesiaVoice && !voice.has(responseId);
+    voice?.push(responseId, tagged ? `[${emotion}] ${delta}` : delta);
   });
   session.on("agent.done", ({ responseId }) => call?.voice?.finish(responseId));
   session.on("response.done", ({ response }) => {

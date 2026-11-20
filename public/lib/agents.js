@@ -134,15 +134,8 @@ export class AgentRunner {
     this.state = {}; // per-call state the tools share, e.g. the verified customer
     this.session = session;
     this.handlers = new Map();
+    this.stepCount = 0;
     session.onToolCall = (call) => this.onToolCall(call);
-    // The step prompt's item id, so the next step can remove it: only the current step's
-    // prompt stays in the history.
-    session.on("conversation.item.added", ({ item }) => {
-      if (item?.role === "system" && this.pendingStepText && textOf(item) === this.pendingStepText) {
-        this.stepItemId = item.id;
-        this.pendingStepText = null;
-      }
-    });
   }
 
   on(type, fn) {
@@ -211,12 +204,11 @@ export class AgentRunner {
     const from = this.step;
     const remove = this.stepItemId ?? undefined;
     this.step = name;
-    this.stepItemId = null;
+    // The page picks the step prompt's item id, so the next step can remove it: only the
+    // current step's prompt stays in the history.
+    this.stepItemId = name === null ? null : `step_${++this.stepCount}`;
     this.session.update({ tools: sessionFor(this.agent, { stepName: name, call: this.call }).tools });
     this.emit("step", { from, to: name, prompt: name && this.agent.steps[name].prompt });
-    this.pendingStepText = name === null ? null : stepMessage(this.agent.steps[name].prompt);
-    return { remove, system: this.pendingStepText ?? undefined };
+    return { remove, system: name === null ? undefined : stepMessage(this.agent.steps[name].prompt), systemId: this.stepItemId ?? undefined };
   }
 }
-
-const textOf = (item) => (item.content ?? []).map((c) => c.text ?? "").join("");

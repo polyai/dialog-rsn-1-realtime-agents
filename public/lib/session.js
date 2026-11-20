@@ -36,7 +36,7 @@ export class RealtimeSession {
    * @param {string} [opts.label] name shown in the event log, e.g. "voice"
    * @param {() => WebSocket} opts.connect opens the socket (through the relay in a browser)
    * @param {(call: object) => Promise<object>} [opts.onToolCall] answers a function call:
-   *        resolves to { output, knowledge?, remove?, system?, say?, hangup? }. Throwing sends
+   *        resolves to { output, knowledge?, remove?, system?, systemId?, say?, hangup? }. Throwing sends
    *        {"error": ...} as the output. After the output: `remove` deletes an item (an old
    *        step's prompt), `system` adds a system message (a new step's prompt), and `say`
    *        adds a fixed assistant line, which the page speaks itself, and asks for no
@@ -140,9 +140,9 @@ export class RealtimeSession {
   }
 
   /** Add a text message to the conversation, as history. */
-  addMessage(role, text) {
+  addMessage(role, text, id) {
     const type = role === "assistant" ? "output_text" : "input_text";
-    this.send({ type: "conversation.item.create", item: { type: "message", role, content: [{ type, text }] } });
+    this.send({ type: "conversation.item.create", item: { ...(id && { id }), type: "message", role, content: [{ type, text }] } });
   }
 
   /** Caller audio, already in the session's input format, base64-encoded. */
@@ -252,7 +252,7 @@ export class RealtimeSession {
 
       case "error":
         // A refused response.create leaves nothing to wait for.
-        if (f.pendingCreate && /response/i.test(event.error?.message ?? "")) f.pendingCreate--;
+        if (f.pendingCreate && event.error?.code === "conversation_already_has_active_response") f.pendingCreate--;
         break;
     }
     this.emit(event.type, event);
@@ -290,14 +290,14 @@ export class RealtimeSession {
       outputs.push({ call, ...result, output });
       this.emit("tool.result", { call, output: result.output, knowledge: result.knowledge, ms: Math.round(performance.now() - started) });
     }
-    for (const { call, output, knowledge, remove, system, say } of outputs) {
+    for (const { call, output, knowledge, remove, system, systemId, say } of outputs) {
       const item = { type: "function_call_output", call_id: call.call_id, output }; // rule 3: call_id as given
       if (knowledge?.length) item.poly_knowledge = knowledge;
       this.send({ type: "conversation.item.create", item });
       // A flow step: only the current step's prompt stays in the history, at the point the
       // step was entered.
       if (remove) this.send({ type: "conversation.item.delete", item_id: remove });
-      if (system) this.addMessage("system", system);
+      if (system) this.addMessage("system", system, systemId);
       // A fixed line from the tool: history only (the server never speaks an assistant item
       // you add), so the page says it.
       if (say) this.addMessage("assistant", say);
@@ -390,6 +390,17 @@ export class RealtimeSession {
       dropped_ms: Math.round(droppedMs),
       spoken_text: spokenText,
     });
+  }
+
+  /**
+   * A reply that was queued behind another and dropped before any of it played. Without this
+   * report the server keeps it in the model's history as heard in full.
+   */
+  playbackDropped(responseId) {
+    const r = this.reportFor(responseId);
+    if (r.started || r.stopped) return;
+    r.stopped = true;
+    this.send({ type: "poly.output_audio.stopped", response_id: responseId, audio_ms: 0, dropped_ms: 0, spoken_text: "" });
   }
 
   /** A line the page says on its own (a tool's fixed line) has no response to report on. */
