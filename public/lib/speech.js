@@ -109,7 +109,10 @@ export class BrowserVoice {
       this.dead.add(id);
       const r = this.replies.get(id);
       if (r.started) this.stop(r, id);
-      else this.forget(id);
+      else {
+        this.session.playbackDropped(id);
+        this.forget(id);
+      }
     }
     speechSynthesis.cancel();
   }
@@ -199,7 +202,8 @@ export class CartesiaVoice {
     this.url = url;
     this.onSpeaking = onSpeaking;
     this.base = {
-      model_id: "sonic-3.6",
+      // A dated release: an alias moves under you.
+      model_id: "sonic-3.6-2026-08-27",
       voice: { mode: "id", id: voiceId },
       output_format: { container: "raw", encoding: "pcm_s16le", sample_rate: SAMPLE_RATE },
       language: "en",
@@ -334,7 +338,8 @@ export class CartesiaVoice {
     } else if (msg.type === "timestamps") {
       // Word start times count from the start of the context, in seconds.
       const ts = msg.word_timestamps;
-      ts.words.forEach((w, i) => r.words.push({ startMs: ts.start[i] * 1000, word: w }));
+      // A delivery tag such as [cheerful] is not something the caller heard.
+      ts.words.forEach((w, i) => /^\[.*\]$/.test(w) || r.words.push({ startMs: ts.start[i] * 1000, word: w }));
     } else if (msg.type === "done" || msg.type === "error") {
       if (msg.type === "error") console.warn("Cartesia:", msg.message ?? msg);
       r.synthDone = true;
@@ -366,7 +371,11 @@ export class CartesiaVoice {
         this.session.playbackStopped(id, played_ms, dropped_ms, heard);
         this.onSpeaking?.({ id, speaking: false, heard, interrupted: dropped_ms > 0 });
       }
-      for (const [id, r] of this.replies) if (r.cancelled) this.remove(id);
+      for (const [id, r] of [...this.replies]) {
+        if (!r.cancelled) continue;
+        if (!r.started) this.session.playbackDropped(id);
+        this.remove(id);
+      }
     }
   }
 }
