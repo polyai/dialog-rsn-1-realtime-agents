@@ -199,7 +199,8 @@ export class CartesiaVoice {
     this.url = url;
     this.onSpeaking = onSpeaking;
     this.base = {
-      model_id: "sonic-3.6",
+      // A dated release: an alias moves under you.
+      model_id: "sonic-3.6-2026-08-27",
       voice: { mode: "id", id: voiceId },
       output_format: { container: "raw", encoding: "pcm_s16le", sample_rate: SAMPLE_RATE },
       language: "en",
