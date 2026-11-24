@@ -63,6 +63,17 @@ const upstreams = {
   ...(CARTESIA_API_KEY && { "/tts": { url: CARTESIA_URL, headers: { "X-API-Key": CARTESIA_API_KEY } } }),
 };
 
+// The names this page is served under. A same-origin check alone passes a hostile page whose
+// own name was re-pointed at this machine (DNS rebinding), since its Origin and Host then agree.
+const ALLOWED_HOSTS = new Set((process.env.ALLOWED_HOSTS || "localhost,127.0.0.1,[::1]").split(",").map((h) => h.trim().toLowerCase()));
+const hostname = (host) => {
+  try {
+    return new URL(`http://${host}`).hostname;
+  } catch {
+    return "";
+  }
+};
+
 const wss = new WebSocketServer({ noServer: true, maxPayload: 1 << 20 });
 
 server.on("upgrade", (req, socket, head) => {
@@ -70,7 +81,7 @@ server.on("upgrade", (req, socket, head) => {
   const upstream = upstreams[pathname];
   // Only this page may use the keys: refuse sockets opened from any other origin. Behind an
   // HTTPS proxy, the page's host is the one the proxy forwards.
-  const hosts = [req.headers.host, req.headers["x-forwarded-host"]].filter(Boolean);
+  const hosts = [req.headers.host, req.headers["x-forwarded-host"]].filter((h) => h && ALLOWED_HOSTS.has(hostname(h)));
   const sameOrigin = hosts.some((h) => req.headers.origin === `http://${h}` || req.headers.origin === `https://${h}`);
   if (!upstream || !sameOrigin) {
     socket.end("HTTP/1.1 403 Forbidden\r\n\r\n");
