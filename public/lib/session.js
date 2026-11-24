@@ -252,7 +252,7 @@ export class RealtimeSession {
 
       case "error":
         // A refused response.create leaves nothing to wait for.
-        if (f.pendingCreate && /response/i.test(event.error?.message ?? "")) f.pendingCreate--;
+        if (f.pendingCreate && event.error?.code === "conversation_already_has_active_response") f.pendingCreate--;
         break;
     }
     this.emit(event.type, event);
