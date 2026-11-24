@@ -392,6 +392,17 @@ export class RealtimeSession {
     });
   }
 
+  /**
+   * A reply that was queued behind another and dropped before any of it played. Without this
+   * report the server keeps it in the model's history as heard in full.
+   */
+  playbackDropped(responseId) {
+    const r = this.reportFor(responseId);
+    if (r.started || r.stopped) return;
+    r.stopped = true;
+    this.send({ type: "poly.output_audio.stopped", response_id: responseId, audio_ms: 0, dropped_ms: 0, spoken_text: "" });
+  }
+
   /** A line the page says on its own (a tool's fixed line) has no response to report on. */
   reportFor(responseId) {
     if (!this.responseIds.has(responseId)) return { started: false, stopped: true, sent: 0, local: true };
