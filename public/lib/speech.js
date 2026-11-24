@@ -109,7 +109,10 @@ export class BrowserVoice {
       this.dead.add(id);
       const r = this.replies.get(id);
       if (r.started) this.stop(r, id);
-      else this.forget(id);
+      else {
+        this.session.playbackDropped(id);
+        this.forget(id);
+      }
     }
     speechSynthesis.cancel();
   }
@@ -366,7 +369,11 @@ export class CartesiaVoice {
         this.session.playbackStopped(id, played_ms, dropped_ms, heard);
         this.onSpeaking?.({ id, speaking: false, heard, interrupted: dropped_ms > 0 });
       }
-      for (const [id, r] of this.replies) if (r.cancelled) this.remove(id);
+      for (const [id, r] of [...this.replies]) {
+        if (!r.cancelled) continue;
+        if (!r.started) this.session.playbackDropped(id);
+        this.remove(id);
+      }
     }
   }
 }
