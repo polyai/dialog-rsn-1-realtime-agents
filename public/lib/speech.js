@@ -334,7 +334,8 @@ export class CartesiaVoice {
     } else if (msg.type === "timestamps") {
       // Word start times count from the start of the context, in seconds.
       const ts = msg.word_timestamps;
-      ts.words.forEach((w, i) => r.words.push({ startMs: ts.start[i] * 1000, word: w }));
+      // A delivery tag such as [cheerful] is not something the caller heard.
+      ts.words.forEach((w, i) => /^\[.*\]$/.test(w) || r.words.push({ startMs: ts.start[i] * 1000, word: w }));
     } else if (msg.type === "done" || msg.type === "error") {
       if (msg.type === "error") console.warn("Cartesia:", msg.message ?? msg);
       r.synthDone = true;
