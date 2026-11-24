@@ -243,7 +243,7 @@ What holds for every scenario here:
 | Pass `call_id` back exactly as it came. | A changed one matches nothing. |
 | One `response.create` at a time, and none to open the call when the session has a welcome message. Hold typed text while the caller is speaking. | Otherwise you get collisions, a second greeting, or a typed message folded into the spoken turn. |
 | Once a session has had audio, keep audio flowing, with silence when the caller shouldn't be heard. | A response waits for audio to keep arriving. Stop sending and it never starts. |
-| Never send `model`. Always declare the input rate for PCM. | The server refuses the whole `session.update`. 8 kHz audio with no rate is never answered. |
+| Always declare the input rate for PCM. | 8 kHz audio with no rate is never answered. |
 
 ## Troubleshooting
 
