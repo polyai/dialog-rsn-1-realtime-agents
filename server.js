@@ -35,20 +35,21 @@ const TYPES = {
 };
 
 const server = createServer(async (req, res) => {
-  const url = new URL(req.url, "http://x");
-  if (url.pathname === "/config") {
-    // What the page can offer. Never the keys themselves.
-    res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ cartesia: Boolean(CARTESIA_API_KEY) }));
-    return;
-  }
-  const path = normalize(decodeURIComponent(url.pathname));
-  const file = join(PUBLIC, path === "/" ? "index.html" : path);
-  if (!file.startsWith(PUBLIC)) {
-    res.writeHead(403).end("forbidden");
-    return;
-  }
+  // One try around everything: a URL that won't parse or decode must not take the relay down.
   try {
+    const url = new URL(req.url, "http://x");
+    if (url.pathname === "/config") {
+      // What the page can offer. Never the keys themselves.
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ cartesia: Boolean(CARTESIA_API_KEY) }));
+      return;
+    }
+    const path = normalize(decodeURIComponent(url.pathname));
+    const file = join(PUBLIC, path === "/" ? "index.html" : path);
+    if (!file.startsWith(PUBLIC)) {
+      res.writeHead(403).end("forbidden");
+      return;
+    }
     const body = await readFile(file);
     res.writeHead(200, { "content-type": TYPES[extname(file)] || "application/octet-stream", "cache-control": "no-store" });
     res.end(body);
@@ -65,7 +66,7 @@ const upstreams = {
 const wss = new WebSocketServer({ noServer: true, maxPayload: 1 << 20 });
 
 server.on("upgrade", (req, socket, head) => {
-  const { pathname } = new URL(req.url, "http://x");
+  const pathname = req.url.split("?")[0];
   const upstream = upstreams[pathname];
   // Only this page may use the keys: refuse sockets opened from any other origin. Behind an
   // HTTPS proxy, the page's host is the one the proxy forwards.
