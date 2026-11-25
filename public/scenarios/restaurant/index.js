@@ -9,6 +9,8 @@
  * - a booking read back before it's made, with a line said while it's written (`poly_spoken`);
  * - `switch_language`, which sets `poly_response_language`;
  * - a transfer to a person, and an end_call.
+ *
+ * `margauxPolish` is the same line answered in Polish, switching to English on request.
  */
 import { agent, tool, spoken, withKnowledge, setSession } from "../../lib/agents.js";
 import { transferCallTool, endCallTool } from "../../lib/callTools.js";
@@ -16,8 +18,10 @@ import { keywordSearch, asTopic } from "../../lib/search.js";
 import { restaurantName, always, guide } from "./knowledge.js";
 import { checkAvailability, createBooking } from "./tables.js";
 
-// What switch_language sets as poly_response_language. The page's voice follows it.
-const LANGUAGES = { English: "en-GB", French: "fr-FR" };
+// What switch_language sets as poly_response_language, the language the call starts in first.
+// The page's voice follows it.
+const ENGLISH_FRENCH = { English: "en-GB", French: "fr-FR" };
+const POLISH_ENGLISH = { Polish: "pl-PL", English: "en-GB" };
 
 const DAY = { type: "string", description: "ISO date, e.g. 2026-09-04" };
 const TIME = { type: "string", description: "24-hour local time, e.g. 19:30" };
@@ -33,12 +37,13 @@ function week(today) {
   }).join(", ");
 }
 
-export const margaux = agent({
+const restaurant = ({ languages, language, description, welcomeMessage }) => agent({
   name: "margaux",
-  description: "A restaurant's phone line: answers from its guide, books tables, speaks French on request.",
+  description,
   callerNumber: "+44 20 7946 0321",
   voice: "25d7abcb-4d6d-4aca-adce-8a1c85620c8b", // Cartesia "Jessica", feminine, as in the poly.ai playground
-  welcomeMessage: `${restaurantName}, this is Margaux. How can I help?`,
+  language,
+  welcomeMessage,
   instructions: (call) => `
 You are Margaux, who answers the phone at ${restaurantName}, an upscale French-Japanese restaurant in Kensington. You're warm and polished, and you keep each reply to one to three short sentences.
 
@@ -53,7 +58,7 @@ Rules:
 - Guests are often booking a celebration: when they mention one, be glad for them and put it in the notes.
 - Never call the guest by their surname. A first name, sparingly, is fine.
 
-You speak English and French. If the guest speaks French, or asks for it, call switch_language.
+You speak ${Object.keys(languages).join(" and ")}. If the guest speaks ${Object.keys(languages)[1]}, or asks for it, call switch_language.
 
 Today is ${call.weekday}, ${call.today}. The coming week: ${week(call.today)}. "Friday" means the next Friday in that list.
 `.trim(),
@@ -109,18 +114,31 @@ Today is ${call.weekday}, ${call.today}. The coming week: ${week(call.today)}. "
       description: "Switch the language you speak to the guest.",
       parameters: {
         type: "object",
-        properties: { language: { type: "string", enum: Object.keys(LANGUAGES) } },
+        properties: { language: { type: "string", enum: Object.keys(languages) } },
         required: ["language"],
       },
       execute: ({ language }, ctx) => {
-        if (!LANGUAGES[language]) return { error: `no language '${language}'` };
+        if (!languages[language]) return { error: `no language '${language}'` };
         ctx.breadcrumb(`Language: ${language}`);
-        return setSession({ poly_response_language: LANGUAGES[language] }, { language });
+        return setSession({ poly_response_language: languages[language] }, { language });
       },
     }),
     transferCallTool({ reasons: ["EVENTS", "CHANGE_BOOKING", "QUESTION", "SPEAK_TO", "COMPLAINT"] }),
     endCallTool(`Thank you for calling ${restaurantName}. Have a lovely evening.`),
   ],
+});
+
+export const margaux = restaurant({
+  languages: ENGLISH_FRENCH,
+  description: "A restaurant's phone line: answers from its guide, books tables, speaks French on request.",
+  welcomeMessage: `${restaurantName}, this is Margaux. How can I help?`,
+});
+
+export const margauxPolish = restaurant({
+  languages: POLISH_ENGLISH,
+  language: POLISH_ENGLISH.Polish,
+  description: "The same restaurant's line answered in Polish, switching to English on request.",
+  welcomeMessage: `${restaurantName}, mówi Margaux. W czym mogę pomóc?`,
 });
 
 export default margaux;

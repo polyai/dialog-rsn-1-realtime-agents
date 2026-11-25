@@ -62,6 +62,8 @@ export const setSession = (fields, output = { ok: true }) => new ToolResult({ ou
  * @param {string | ((call: CallContext) => string)} a.instructions the system prompt. A
  *        function gets this call's context (caller's number, today's date).
  * @param {string} [a.welcomeMessage] the first thing the agent says, word for word
+ * @param {string} [a.language] the language the call starts in, when it isn't English: sent as
+ *        `poly_response_language`, e.g. "pl-PL". The page's voice starts in it too.
  * @param {string} [a.voice] the Cartesia voice id the page speaks this agent in, unless the
  *        visitor picks another
  * @param {Array<{name: string, content: string, actions?: string}>} [a.knowledge] topics on
@@ -72,8 +74,8 @@ export const setSession = (fields, output = { ok: true }) => new ToolResult({ ou
  *
  * @typedef {{ callerNumber: string | null, today: string, weekday: string }} CallContext
  */
-export function agent({ name, description = "", instructions, welcomeMessage, voice, knowledge, tools = [], steps = {}, callerNumber }) {
-  return { name, description, instructions, welcomeMessage, voice, knowledge, tools, steps, callerNumber };
+export function agent({ name, description = "", instructions, welcomeMessage, language, voice, knowledge, tools = [], steps = {}, callerNumber }) {
+  return { name, description, instructions, welcomeMessage, language, voice, knowledge, tools, steps, callerNumber };
 }
 
 /**
@@ -155,6 +157,7 @@ export class AgentRunner {
   sessionConfig() {
     const session = sessionFor(this.agent, { call: this.call });
     if (this.agent.welcomeMessage) session.poly_first_assistant_message = this.agent.welcomeMessage;
+    if (this.agent.language) session.poly_response_language = this.agent.language;
     return session;
   }
 

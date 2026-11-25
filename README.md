@@ -18,6 +18,7 @@ Open http://localhost:3000, press **Connect** and start talking. Use headphones,
 | Scenario | What it shows |
 | --- | --- |
 | **Restaurant: bookings, knowledge and French** | Margaux at Maison Lumiere, the restaurant from the playground on poly.ai. She answers from always-on topics and a searchable guide, citing what she used, checks availability and reads a booking back before making it, and switches to French on request. Start here. |
+| **Restaurant in Polish, and English on request** | The same line with `language: "pl-PL"` on the agent: the welcome message is Polish, the call starts with `poly_response_language` set, and `switch_language` moves it to English. Dialog-RSN-1 answers only in the languages its prompt allows, so the prompt names both. |
 | **Knowledge agent** | An energy supplier's help line. It answers from its help center, takes a meter reading when a topic's action says to, and transfers to a person or ends the call. The page shows which articles each answer cited. |
 | **Bike shop: one agent with a flow** | A bike shop's phone line. It verifies the caller with one function, handles a return in a flow step with a policy check in code, sells from the sale by following a topic, and ends with a transfer or a goodbye. |
 

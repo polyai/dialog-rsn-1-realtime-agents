@@ -172,7 +172,7 @@ async function connect() {
 
   const session = new RealtimeSession({ label: "voice", connect: relay });
   const runner = new AgentRunner({ agent: scenarios[scenarioKey], session });
-  call = { session, runner, voice: null, mic: null, talking: false, ending: false, language: null };
+  call = { session, runner, voice: null, mic: null, talking: false, ending: false, language: runner.agent.language?.slice(0, 2).toLowerCase() ?? null };
   log.attach(session);
   bind(session, runner);
 
