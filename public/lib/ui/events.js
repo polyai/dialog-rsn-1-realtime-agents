@@ -8,6 +8,7 @@ const MAX_ROWS = 2000;
 export class EventLog {
   constructor(root, filterInput) {
     this.root = root;
+    this.entries = []; // what the rows show, in full, for copying
     this.filter = "";
     filterInput?.addEventListener("input", () => {
       this.filter = filterInput.value.trim().toLowerCase();
@@ -17,6 +18,12 @@ export class EventLog {
 
   clear() {
     this.root.replaceChildren();
+    this.entries = [];
+  }
+
+  /** Every event still in the log with its payload, one JSON object a line, whatever the filter. */
+  text() {
+    return this.entries.map((e) => JSON.stringify(e)).join("\n");
   }
 
   matches(type) {
@@ -36,7 +43,9 @@ export class EventLog {
     row.dataset.type = event.type;
     row.hidden = !this.matches(event.type);
     const summary = document.createElement("summary");
-    const time = new Date().toISOString().slice(11, 23);
+    const at = new Date().toISOString();
+    const time = at.slice(11, 23);
+    this.entries.push({ time: at, direction, session: label, event });
     summary.innerHTML = `<span class="t"></span><span class="dir"></span><span class="who"></span><span class="type"></span>`;
     summary.querySelector(".t").textContent = time;
     summary.querySelector(".dir").textContent = direction === "out" ? "▲" : "▼";
@@ -53,7 +62,10 @@ export class EventLog {
       }
     });
     this.root.append(row);
-    while (this.root.children.length > MAX_ROWS) this.root.firstChild.remove();
+    while (this.root.children.length > MAX_ROWS) {
+      this.root.firstChild.remove();
+      this.entries.shift();
+    }
     if (stick) this.root.scrollTop = this.root.scrollHeight;
   }
 }

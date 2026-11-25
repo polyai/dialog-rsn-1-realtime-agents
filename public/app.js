@@ -18,6 +18,16 @@ const relay = () => new WebSocket(wsUrl("realtime"));
 const server = await fetch("config").then((r) => r.json()).catch(() => ({ cartesia: false }));
 const transcript = new Transcript($("transcript"));
 const log = new EventLog($("events"), $("eventFilter"));
+$("copyLog").addEventListener("click", async () => {
+  const button = $("copyLog");
+  try {
+    await navigator.clipboard.writeText(log.text());
+    button.textContent = "Copied";
+  } catch {
+    button.textContent = "Couldn't copy";
+  }
+  setTimeout(() => (button.textContent = "Copy log"), 1500);
+});
 
 // ---- Preferences (this browser only) ---------------------------------------------------
 
