@@ -30,6 +30,14 @@ const JOURNEYS = {
     "What's on the Omakase menu?",
     "Great, that's all. Bye!",
   ],
+  restaurantPolish: [
+    "Dzień dobry, chciałbym zarezerwować stolik na piątek na wpół do ósmej, dla czterech osób.",
+    "Na nazwisko Kowalski, Jan Kowalski.",
+    "Tak, zgadza się.",
+    "Co jest w menu Omakase?",
+    "Could we carry on in English, please? Is there a dress code?",
+    "Great, that's all. Bye!",
+  ],
   knowledgeAgent: [
     "Hi, how do I send you a meter reading?",
     "Can I give you one now? It's the electricity meter, and it says 4 8 2 1 7.",
